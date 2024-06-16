@@ -15,7 +15,6 @@ RUN pip install -U pip && \
     pip install --no-cache-dir -r /tmp/requirements/prod.txt
 
 COPY . /src
-COPY ./.env.prod /src/.env
 ENV PATH "$PATH:/src/scripts"
 
 # Create a group and user to run our app

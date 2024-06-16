@@ -9,8 +9,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    volumes:
-      - ./:/src
     ports:
       - "16000:8000"
     depends_on:
