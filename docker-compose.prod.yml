@@ -17,8 +17,8 @@ services:
       - app_db
 
   app_db:
-    container_name: postgres
-    hostname: postgres
+    container_name: app_db
+    hostname: app_db
     image: library/postgres:14.1
     env_file:
       - .env
