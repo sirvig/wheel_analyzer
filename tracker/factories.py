@@ -1,6 +1,6 @@
 from datetime import datetime
 import factory
-from .models import User, Account, Campaign, Stock, Transaction
+from .models import User, Account, Campaign, Transaction
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -11,14 +11,6 @@ class UserFactory(factory.django.DjangoModelFactory):
     first_name = factory.Faker("first_name")
     last_name = factory.Faker("last_name")
     username = factory.Sequence(lambda n: "user%d" % n)
-
-
-class StockFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = Stock
-        django_get_or_create = ("symbol",)
-
-    symbol = factory.Iterator(["AAPL", "AAP", "CRM", "CSIQ", "NVDA", "UPS"])
 
 
 class AccountFactory(factory.django.DjangoModelFactory):
@@ -35,7 +27,7 @@ class CampaignFactory(factory.django.DjangoModelFactory):
         model = Campaign
 
     user = factory.SubFactory(UserFactory)
-    stock = factory.SubFactory(StockFactory)
+    stock = factory.Iterator(["AAPL", "AAP", "CRM", "CSIQ", "NVDA", "UPS"])
     account = factory.SubFactory(AccountFactory)
     active = factory.Iterator([True, False])
     start_date = factory.Faker(

@@ -17,18 +17,10 @@ class Account(models.Model):
         return self.name
 
 
-class Stock(models.Model):
-    symbol = models.CharField(max_length=10, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.symbol
-
-
 class Campaign(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    stock = models.ForeignKey(Stock, on_delete=models.DO_NOTHING)
     account = models.ForeignKey(Account, on_delete=models.DO_NOTHING)
+    stock = models.CharField(max_length=10)
     active = models.BooleanField(blank=True, null=True)
     start_date = models.DateField(auto_now=False, blank=True, null=True)
     end_date = models.DateField(auto_now=False, blank=True, null=True)
@@ -37,7 +29,7 @@ class Campaign(models.Model):
     objects = CampaignsQuerySet.as_manager()
 
     def __str__(self):
-        return f"Stock: {self.stock.symbol} Account: {self.account.name} Started: {self.start_date} Active: {self.active}"
+        return f"Stock: {self.stock} Account: {self.account.name} Started: {self.start_date} Active: {self.active}"
 
     class Meta:
         ordering = ["-start_date"]
@@ -66,7 +58,7 @@ class Transaction(models.Model):
     objects = TransactionsQuerySet.as_manager()
 
     def __str__(self):
-        return f"{self.transaction_date} - {self.campaign.stock.symbol} - {self.campaign.account.name}"
+        return f"{self.transaction_date} - {self.campaign.stock} - {self.campaign.account.name}"
 
     class Meta:
         ordering = ["-transaction_date"]

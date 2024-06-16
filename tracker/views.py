@@ -27,7 +27,7 @@ def campaigns_list(request):
     campaign_filter = CampaignFilter(
         request.GET,
         queryset=Campaign.objects.filter(user=request.user).select_related(
-            "stock", "account"
+            "account"
         ),
     )
     context = {"filter": campaign_filter}

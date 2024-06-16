@@ -1,5 +1,5 @@
 from django import forms
-from tracker.models import Account, Campaign, Stock, Transaction
+from tracker.models import Account, Campaign, Transaction
 
 
 class TransactionForm(forms.ModelForm):
@@ -29,8 +29,6 @@ class TransactionForm(forms.ModelForm):
 
 
 class CampaignForm(forms.ModelForm):
-    stock = forms.ModelChoiceField(queryset=Stock.objects.all())
-
     account = forms.ModelChoiceField(
         queryset=None, widget=forms.Select(), required=True
     )

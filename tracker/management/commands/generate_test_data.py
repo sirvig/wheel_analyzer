@@ -1,7 +1,7 @@
 import random
 from faker import Faker
 from django.core.management.base import BaseCommand
-from tracker.models import User, Account, Stock, Campaign, Transaction
+from tracker.models import User, Account, Campaign, Transaction
 
 
 class Command(BaseCommand):
@@ -18,9 +18,6 @@ class Command(BaseCommand):
         # Create stocks
         stocks = ["AAP", "AAPL", "AMZN", "CRM", "CSIQ", "NVDA", "UPS"]
 
-        for stock in stocks:
-            Stock.objects.get_or_create(symbol=stock)
-
         # Create Accounts
         accounts = [
             "Fidelity",
@@ -32,7 +29,6 @@ class Command(BaseCommand):
             Account.objects.get_or_create(user=user, name=account, taxable=True)
 
         # Create 5 campaigns
-        stocks = Stock.objects.all()
         accounts = Account.objects.all()
         for i in range(5):
             Campaign.objects.create(
