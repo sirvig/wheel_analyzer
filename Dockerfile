@@ -1,0 +1,53 @@
+FROM python:slim-buster
+
+RUN apt-get update && \
+    apt-get install -y gcc libpq-dev postgresql-client && \
+    apt clean && \
+    rm -rf /var/cache/apt/*
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8
+
+COPY requirements/ /tmp/requirements
+
+RUN pip install -U pip && \
+    pip install --no-cache-dir -r /tmp/requirements/dev.txt
+
+COPY . /src
+ENV PATH "$PATH:/src/scripts"
+
+# Create a group and user to run our app
+ARG APP_USER=appuser
+RUN groupadd -r ${APP_USER} \
+    && useradd --no-log-init -r -g ${APP_USER} ${APP_USER}
+
+WORKDIR /src
+
+# Add any static environment variables needed by Django or your settings file here:
+ENV DJANGO_SETTINGS_MODULE=wheel_analyzer.settings
+ENV DJANGO_MANAGEPY_MIGRATE=on
+        
+# Call collectstatic (customize the following line with the minimal environment variables needed for manage.py to run):
+RUN DATABASE_URL='' python manage.py collectstatic --noinput
+
+# Tell uWSGI where to find your wsgi file (change this):
+ENV UWSGI_WSGI_FILE=wheel_analyzer/wsgi.py
+
+# Base uWSGI configuration (you shouldn't need to change these):
+ENV UWSGI_HTTP=:8000 UWSGI_MASTER=1 UWSGI_HTTP_AUTO_CHUNKED=1 UWSGI_HTTP_KEEPALIVE=1 UWSGI_LAZY_APPS=1 UWSGI_WSGI_ENV_BEHAVIOR=holy
+
+# Number of uWSGI workers and threads per worker (customize as needed):
+ENV UWSGI_WORKERS=2 UWSGI_THREADS=4
+
+# uWSGI static file serving configuration (customize or comment out if not needed):
+ENV UWSGI_STATIC_MAP="/static/=/src/staticfiles/" UWSGI_STATIC_EXPIRES_URI="/static/.*\.[a-f0-9]{12,}\.(css|js|png|jpg|jpeg|gif|ico|woff|ttf|otf|svg|scss|map|txt) 315360000"
+
+# Deny invalid hosts before they get to Django (uncomment and change to your hostname(s)):
+ENV UWSGI_ROUTE_HOST="^(?!localhost:8000$|localhost:16000$) break:400"
+
+# Change to a non-root user
+RUN chown -R ${APP_USER}:${APP_USER} /src/* && chmod +x /src/scripts/*
+USER ${APP_USER}:${APP_USER}
+    
+CMD ["./scripts/start-dev.sh"]
