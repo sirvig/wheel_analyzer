@@ -1,3 +1,4 @@
+from datetime import datetime
 from django.db import models
 
 
@@ -20,7 +21,9 @@ class TransactionsQuerySet(models.QuerySet):
         if delta.days:
             return delta.days
         else:
-            return 1
+            today = datetime.today().date()
+            delta = today - latest
+            return delta.days
     
     def get_annualized_return(self):
         total_profit = self.aggregate(total=models.Sum("premium"))["total"] or 0
