@@ -72,7 +72,7 @@
             <div class="card w-56 bg-base-100 shadow-xl">
                 <div class="card-body">
                     <h2 class="card-title">Days in Trade</h2>
-                    <p>{{ days_in_trade }} day{{ days_in_trade|pluralize }}</p>
+                    <p>{% if days_in_trade %}{{ days_in_trade }} day{{ days_in_trade|pluralize }}{% endif %}</p>
                 </div>
             </div>
         </div>
@@ -80,7 +80,7 @@
             <div class="card w-56 bg-base-100 shadow-xl">
                 <div class="card-body">
                     <h2 class="card-title">Annualized</h2>
-                    <p>Total Profit: {{ annualized_return|floatformat:2 }}%</p>
+                    <p>Total Profit: {% if annualized_return %}{{ annualized_return|floatformat:2 }}%{% endif %}</p>
                 </div>
             </div>
         </div>
