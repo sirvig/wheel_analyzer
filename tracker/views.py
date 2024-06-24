@@ -70,6 +70,12 @@ def transactions_list(request, campaign_id):
 
     total_premium = transactions.get_total()
     context["total_premium"] = total_premium
+    
+    days_in_trade = transactions.get_days_in_trade()
+    context["days_in_trade"] = days_in_trade
+    
+    annualized_return = transactions.get_annualized_return()
+    context["annualized_return"] = annualized_return
 
     if request.htmx:
         return render(request, "tracker/partials/transactions-container.html", context)

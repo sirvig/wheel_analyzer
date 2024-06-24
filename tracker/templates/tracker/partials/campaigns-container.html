@@ -38,7 +38,7 @@
                             <td><a href="{% url 'transactions-list' campaign.id %}">{{ campaign.stock }}</a></td>
                             <td>{{ campaign.account.name }}</td>
                             <td>{{ campaign.start_date }}</td>
-                            <td>{% if campaign.is_completed %}Completed{% else %}In-Progress{% endif %}</td>
+                            <td>{% if not campaign.active %}Completed{% else %}In-Progress{% endif %}</td>
                         </tr>
                     {% endfor %}
                 </tbody>

@@ -19,7 +19,7 @@ class Account(models.Model):
 
 class Campaign(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    account = models.ForeignKey(Account, on_delete=models.DO_NOTHING)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE)
     stock = models.CharField(max_length=10)
     active = models.BooleanField(blank=True, null=True)
     start_date = models.DateField(auto_now=False, blank=True, null=True)
@@ -32,7 +32,7 @@ class Campaign(models.Model):
         return f"Stock: {self.stock} Account: {self.account.name} Started: {self.start_date} Active: {self.active}"
 
     class Meta:
-        ordering = ["-start_date"]
+        ordering = ["stock", "account", "-start_date"]
 
 
 class Transaction(models.Model):
@@ -42,11 +42,12 @@ class Transaction(models.Model):
         ("roll", "Roll"),
         ("buy", "Buy"),
         ("sell", "Sell"),
+        ("btc", "Buy To Close"),
     )
 
-    campaign = models.ForeignKey(Campaign, on_delete=models.DO_NOTHING)
+    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE)
     type = models.CharField(max_length=7, choices=TRANSACTION_TYPE_CHOICES)
-    premium = models.DecimalField(max_digits=10, decimal_places=2)
+    premium = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     transaction_date = models.DateField()
     expiration_date = models.DateField(blank=True, null=True)
     strike_price = models.DecimalField(
