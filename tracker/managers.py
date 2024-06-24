@@ -17,16 +17,23 @@ class TransactionsQuerySet(models.QuerySet):
         earliest = self.earliest("transaction_date").transaction_date
         latest = self.latest("transaction_date").transaction_date
         delta = latest - earliest
-        
-        return delta.days
+        if delta.days:
+            return delta.days
+        else:
+            return 1
     
     def get_annualized_return(self):
         total_profit = self.aggregate(total=models.Sum("premium"))["total"] or 0
-        sell_transaction = self.get(type="sell")
-        shares = sell_transaction.contracts
-        sell_price = sell_transaction.strike_price
-        total_invested = shares * sell_price
         
+        if self.filter(type="sell"):
+            sell_transaction = self.get(type="sell")
+            shares = sell_transaction.contracts
+            sell_price = sell_transaction.strike_price
+            total_invested = shares * sell_price
+            annualized_return = (((total_profit / total_invested) / self.get_days_in_trade()) * 365) * 100
+        else:
+            latest_transaction = self.latest("transaction_date")
+            total_invested = (latest_transaction.contracts * 100) * latest_transaction.strike_price
+            annualized_return = (((total_profit / total_invested) / self.get_days_in_trade()) * 365) * 100
 
-        annualized_return = (((total_profit / total_invested) / self.get_days_in_trade()) * 365) * 100
         return annualized_return
