@@ -15,15 +15,13 @@ class TransactionsQuerySet(models.QuerySet):
         return self.aggregate(total=models.Sum("premium"))["total"] or 0
     
     def get_days_in_trade(self):
+        today = datetime.today().date()
         earliest = self.earliest("transaction_date").transaction_date
-        latest = self.latest("transaction_date").transaction_date
-        delta = latest - earliest
+        delta = today - earliest
         if delta.days:
             return delta.days
         else:
-            today = datetime.today().date()
-            delta = today - latest
-            return delta.days
+            return 1
     
     def get_annualized_return(self):
         total_profit = self.aggregate(total=models.Sum("premium"))["total"] or 0
