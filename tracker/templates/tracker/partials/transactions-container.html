@@ -1,0 +1,89 @@
+{% load widget_tweaks %}
+{% load humanize %}
+
+<!-- Define Grid container div -->
+<div class="flex flex-col-reverse md:grid md:grid-cols-4 md:gap-4" 
+    id="transactions-container">
+
+    <!-- 3/4 cols for the table of transactions -->
+    <div class="col-span-3">
+        <div class="flex justify-between items-center mt-4 mb-6">
+            <h1 class="mt-8 mb-4 prose prose-2xl text-white">
+                Transactions
+            </h1>
+
+            <a hx-get="{% url 'create-transaction' campaign.id %}"
+                hx-push-url="true"
+                hx-target="#transaction-block"
+                class="cursor-pointer">
+
+                <svg xmlns="http://www.w3.org/2000/svg" fill="green" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+            </a>       
+        </div>
+        
+        {% if transactions %}
+            <table class="table">
+                <thead class="text-xs text-white uppercase">
+                    <tr>
+                        <th class="px-6 py-3">Date</th>
+                        <th class="px-6 py-3">Type</th>
+                        <th class="px-6 py-3">Strike</th>
+                        <th class="px-6 py-3">Contracts</th>
+                        <th class="px-6 py-3">Exp. Date</th>
+                        <th class="px-6 py-3">Premium </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                        <tr>
+                            <td>{{ transaction.transaction_date|date:"m/d/Y" }}</td>
+                            <td>{{ transaction.type|capfirst }}</td>
+                            <td>{% if transaction.strike_price %}${{ transaction.strike_price|intcomma }}{% endif %}</td> 
+                            <td>{% if transaction.contracts %}{{ transaction.contracts }}{% endif %}</td>
+                            <td>{% if transaction.expiration_date %}{{ transaction.expiration_date }}{% endif %}</td>
+                            <td>{% if transaction.premium %}${{ transaction.premium|intcomma }}{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% else %}
+
+            <p class="text-2xl text-white">
+                No transactions found
+            </p>
+
+        {% endif %}
+    </div>
+
+    <!-- 1/4 cols for the filter form -->
+    <div class="col-span-1">
+        <div class="my-4">
+            <div class="card w-56 bg-base-100 shadow-xl {% if not total_premium %}visibility: hidden{% endif %}">
+                <div class="card-body">
+                    <h2 class="card-title">Total Income</h2>
+                    <p>${{ total_premium|floatformat:2|intcomma }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="my-4">
+            <div class="card w-56 bg-base-100 shadow-xl{% if not days_in_trade %}visibility: hidden{% endif %}">
+                <div class="card-body">
+                    <h2 class="card-title">Days in Trade</h2>
+                    <p>{{ days_in_trade }} day{{ days_in_trade|pluralize }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="my-4">
+            <div class="card w-56 bg-base-100 shadow-xl {% if not annualized_return %}visibility: hidden{% endif %}">
+                <div class="card-body">
+                    <h2 class="card-title">Annualized</h2>
+                    <p>Total Profit: {{ annualized_return|floatformat:2 }}%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>

@@ -1,0 +1,41 @@
+{% load widget_tweaks %}
+
+<h1 class="mt-8 mb-4 prose prose-2xl text-white">
+    Create Transaction
+</h1>
+
+<form hx-post="{% url 'create-transaction' campaign_id %}">
+    <div class="mb-2 form-control text-slate">
+        {{ form.transaction_date|add_label_class:"label text-slate" }}
+        {% render_field form.transaction_date class="input text-slate" %}
+    </div>
+
+    <div class="mb-2 form-control text-slate">
+        {{ form.type|add_label_class:"label text-slate" }}
+        {% render_field form.type class="input text-slate" %}
+    </div>
+
+    <div class="mb-2 form-control">
+        {{ form.strike_price|add_label_class:"label text-slate" }}
+        {% render_field form.strike_price class="input" %}
+    </div>
+
+    <div class="mb-2 form-control">
+        {{ form.contracts|add_label_class:"label text-slate" }}
+        {% render_field form.contracts class="input" %}
+    </div>
+
+    <div class="mb-2 form-control">
+        {{ form.expiration_date|add_label_class:"label text-slate" }}
+        {% render_field form.expiration_date class="input" %}
+    </div>
+
+    <div class="mb-2 form-control text-slate">
+        {{ form.premium|add_label_class:"label text-slate" }}
+        {% render_field form.premium class="input" %}
+    </div>
+
+    <button class="btn btn-success">
+        Add
+    </button>
+</form>

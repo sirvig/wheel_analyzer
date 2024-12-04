@@ -1,0 +1,72 @@
+{% load widget_tweaks %}
+
+<!-- Define Grid container div -->
+<div class="flex flex-col-reverse md:grid md:grid-cols-4 md:gap-4" 
+    id="campaign-container">
+
+    <!-- 3/4 cols for the table of campaigns -->
+    <div class="col-span-3">
+        <div class="flex justify-between items-center mt-4 mb-6">
+            <h1 class="mt-8 mb-4 prose prose-2xl text-white">
+                Campaigns
+            </h1>
+    
+            <a hx-get="{% url 'create-campaign' %}"
+                hx-push-url="true"
+                hx-target="#campaign-block"
+                class="cursor-pointer">
+    
+                <svg xmlns="http://www.w3.org/2000/svg" fill="green" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+            </a>       
+        </div>
+
+        {% if filter.qs %}
+            <table class="table">
+                <thead class="text-xs text-white uppercase">
+                    <tr>
+                        <th class="px-6 py-3">Stock</th>
+                        <th class="px-6 py-3">Account</th> 
+                        <th class="px-6 py-3">Start Date</th>
+                        <th class="px-6 py-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for campaign in filter.qs %}
+                        <tr>
+                            <td><a href="{% url 'transactions-list' campaign.id %}">{{ campaign.stock }}</a></td>
+                            <td>{{ campaign.account.name }}</td>
+                            <td>{{ campaign.start_date }}</td>
+                            <td>{% if not campaign.active %}Completed{% else %}In-Progress{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% else %}
+
+            <p class="text-2xl text-white">
+                No campaigns found
+            </p>
+
+        {% endif %}
+    </div>
+
+    <!-- 1/4 cols for the filter form -->
+    <div class="col-span-1">
+        <form hx-get="{% url 'campaigns-list' %}" 
+            hx-target="#campaign-container"
+            hx-swap="outerHTML">
+            <div class="mb-2 form-control">
+                {{ filter.form.campaign_status|add_label_class:"label text-white" }}
+                {% render_field filter.form.campaign_status class="select bg-gray-50 text-gray-900" %}
+            </div>
+    
+            <button class="btn btn-success">
+                Filter
+            </button>
+        </form>
+    </div>
+
+</div>

@@ -1,0 +1,21 @@
+{% load widget_tweaks %}
+
+<h1 class="mt-8 mb-4 prose prose-2xl text-white">
+    Create Campaign
+</h1>
+
+<form hx-post="{% url 'create-campaign' %}">
+    <div class="mb-2 form-control text-slate">
+        {{ form.account|add_label_class:"label text-slate" }}
+        {% render_field form.account class="input text-slate" %}
+    </div>
+
+    <div class="mb-2 form-control text-slate">
+        {{ form.stock|add_label_class:"label text-slate" }}
+        {% render_field form.stock class="input text-slate" %}
+    </div>
+
+    <button class="btn btn-success">
+        Add
+    </button>
+</form>
