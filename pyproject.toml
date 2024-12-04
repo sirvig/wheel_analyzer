@@ -20,6 +20,17 @@ dependencies = [
 [dependency-groups]
 dev = [
     "django-debug-toolbar>=4.4.6",
+    "factory-boy>=3.3.1",
+    "pytest-env>=1.1.5",
     "pytest>=8.3.4",
     "pytest-django>=4.9.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "wheel_analyzer.settings"
+python_files = "tests.py test_*.py *_tests.py"
+addopts = "-rP"
+env = [
+    "ENVIRONMENT=TESTING",
+    "DATABASE_URL=postgresql://app:app@localhost:65432/app"
 ]
