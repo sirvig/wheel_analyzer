@@ -31,7 +31,7 @@ def test_calculate_roll_price():
     assert roll_price == 0.05
 
     negative_roll_price = round(calculate_roll_price(0.5, 0.45), 2)
-    assert negative_roll_price == 0.05
+    assert negative_roll_price == -0.05
 
 
 def test_format_contract_date():
