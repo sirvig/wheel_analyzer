@@ -1,9 +1,12 @@
+from datetime import datetime
+
 from scanner.marketdata.util import (
     calculate_annualized_return,
     calculate_percent_change,
     calculate_roll_price,
     format_contract_date,
     format_contract_strike,
+    is_market_open,
 )
 
 
@@ -48,3 +51,12 @@ def test_format_contract_strike():
 
     strike = format_contract_strike(1000.00)
     assert strike == "01000000"
+
+
+def test_is_market_open():
+    friday_during = datetime(2024, 12, 6, 14, 15)
+    monday_before = datetime(2024, 12, 9, 8, 15)
+    wednesday_after = datetime(2024, 12, 4, 16, 15)
+    assert is_market_open(friday_during) == True
+    assert is_market_open(monday_before) == False
+    assert is_market_open(wednesday_after) == False

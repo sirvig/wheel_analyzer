@@ -16,6 +16,13 @@
         
             {% if user.is_authenticated %}
                 <li>
+                    <a href="{% url 'scanner_index' %}" 
+                        class="block py-2 pl-3 pr-4 text-white rounded md:p-0" 
+                        aria-current="page">
+                            Options Scanner
+                    </a>
+                </li>
+                <li>
                     <a href="{% url 'campaigns-list' %}" 
                         class="block py-2 pl-3 pr-4 text-white rounded md:p-0" 
                         aria-current="page">

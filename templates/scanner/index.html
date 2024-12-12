@@ -1,0 +1,26 @@
+{% extends '../base.html' %}
+
+
+{% block content %}
+
+<h1 class="mt-4 mb-6 text-2xl leading-none tracking-tight text-white md:text-3xl lg:text-4xl">
+    Options Scanner 
+</h1>
+
+Last scan: {{ last_scan }}<br />
+<br />
+
+{% if tickers %}
+<p>The following tickers have PUT options with a delta of .20 or less and an annualized return of 30% or more.</p>
+{% else %}
+<p>No options found.</p>
+{% endif %}
+
+<ul>
+    {% for ticker in tickers %}
+    <li><a href="{% url 'options_list' ticker %}">{{ ticker }}</a></li>
+    {% endfor %}
+</ul>
+
+
+{% endblock content %}

@@ -119,3 +119,13 @@ def get_desired_delta(contract_type, days_to_expiration):
             return put_delta - 0.16
         else:
             return call_delta + 0.16
+
+
+def is_market_open(now=datetime.now()):
+    if (
+        now.weekday() < 5  # Monday to Friday
+        and (now.hour > 9 or (now.hour == 9 and now.minute >= 30))  # After 9:30 AM
+        and now.hour < 16  # Before 4:00 PM
+    ):
+        return True
+    return False

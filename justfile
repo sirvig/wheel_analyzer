@@ -18,6 +18,12 @@ ruff *args:
 @lint:
   just ruff
 
+runserver:
+  uv run manage.py runserver
+
+@run:
+  just runserver
+
 up:
   docker-compose up -d
 
@@ -56,6 +62,9 @@ options *args:
 
 rolls *args:
     uv run manage.py find_rolls {{args}}
+
+cron *args:
+    uv run manage.py cron_scanner {{args}}
 
 redis-cli *args:
     redis-cli -p 36379 -a "myStrongPassword" {{args}}
