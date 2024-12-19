@@ -63,8 +63,11 @@ options *args:
 rolls *args:
     uv run manage.py find_rolls {{args}}
 
-cron *args:
+scan *args:
     uv run manage.py cron_scanner {{args}}
+
+sma *args:
+    uv run manage.py cron_sma {{args}}
 
 redis-cli *args:
     redis-cli -p 36379 -a "myStrongPassword" {{args}}

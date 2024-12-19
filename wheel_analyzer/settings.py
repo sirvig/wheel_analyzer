@@ -19,7 +19,10 @@ SECRET_KEY = env("SECRET_KEY", default="unsafe-secret-key")
 DEBUG = env("DEBUG", default=False)
 
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", default="*,").split(",")
-
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'https://*.ngrok-free.app',
+]
 
 # Application definition
 

@@ -56,7 +56,11 @@ class Command(BaseCommand):
             )
 
             options = find_options(ticker, contract_type)
-            r.set(f"{contract_type}_{ticker}", json.dumps(options), ex=TTL)
+            hash_key = f"{contract_type}_{ticker}"
+            r.hset(hash_key, "options", json.dumps(options))
+            now = datetime.now()
+            r.hset(hash_key, "last_scan", now.strftime("%Y-%m-%d %H:%M"))
+            r.expire(hash_key, TTL)
 
         # Last scan timestamp
         now = datetime.now()
