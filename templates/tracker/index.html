@@ -4,7 +4,7 @@
 {% block content %}
 
 <h1 class="mt-4 mb-6 text-2xl leading-none tracking-tight text-white md:text-3xl lg:text-4xl">
-    Welcome to the Wheel Analyzer
+    Overview - Wheel Tracker  
 </h1>
 
 
@@ -16,15 +16,12 @@
         </svg>
     
         <p class="text-xl text-white">
-            Welcome, {{ user.username }}
+            Logged in as {{ user.username }}
         </p>
     </div>
 
 {% else %}
 
 {% endif %}
-
-
-<p class="text-white">{% lorem %}</p>
 
 {% endblock content %}
