@@ -64,7 +64,7 @@ restore *args:
 options *args:
     uv run manage.py find_options {{args}}
 
-rolls *args:
+roll *args:
     uv run manage.py find_rolls {{args}}
 
 scan *args:
@@ -72,6 +72,9 @@ scan *args:
 
 sma *args:
     uv run manage.py cron_sma {{args}}
+
+premium *args:
+    uv run manage.py calculate_minimum_premium {{args}}
 
 redis-cli *args:
     redis-cli -p 36379 -a "myStrongPassword" {{args}}
