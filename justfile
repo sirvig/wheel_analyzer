@@ -1,12 +1,16 @@
 _default: list
 
 set dotenv-load := true
+set shell := ["bash", "-c"]
+
+registry := "ghcr.io"
+namespace := "sirvig"
 
 alias l := list
 alias t := test
 
 list:
-    @just -l
+    @just -l --color always | less --quit-if-one-screen --RAW-CONTROL-CHARS --no-init
 
 @test *options:
     uv run pytest {{options}}
@@ -71,3 +75,28 @@ sma *args:
 
 redis-cli *args:
     redis-cli -p 36379 -a "myStrongPassword" {{args}}
+
+build:
+  #!/usr/bin/env bash
+  image="wheel-analyzer"
+  version="latest"
+  image_full_name="{{registry}}/{{namespace}}/${image}"
+  tagged_name="${image_full_name}:${version}"
+  docker build -t $tagged_name .
+  docker images $tagged_name
+  docker history $tagged_name
+  [[ "${PUSH:-}" != "true" ]] || just push "${image_full_name}" "${version}"
+
+[private]
+push image tag:
+  docker push "{{image}}:{{tag}}"
+
+
+docker-run:
+  docker run --rm --network app_main --env-file=./.env.docker --publish 8080:8000 --name wheel-analyzer --detach wheel-analyzer:latest
+
+@docker-start:
+  just docker-run
+
+docker-stop:
+  docker stop wheel-analyzer

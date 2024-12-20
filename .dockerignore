@@ -1,0 +1,8 @@
+.env
+.env.docker
+.venv
+.git
+.gitignore
+.pytest-cache
+db.sqlite3
+docker-compose.yml

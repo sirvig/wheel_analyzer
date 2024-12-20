@@ -11,6 +11,7 @@ wheels/
 
 # Private environment files
 .env
+.env.docker
 
 # Django things
 db.sqlite3
