@@ -13,7 +13,7 @@ from scanner.marketdata.util import is_market_open
 logger = logging.getLogger(__name__)
 DEBUG = False
 
-TTL = 15 * 60  # 15 minutes
+TTL = 30 * 60  # 30 minutes
 
 
 class Command(BaseCommand):

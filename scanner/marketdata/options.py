@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 DEBUG = False
 
 
-def find_options(ticker, type, number_of_weeks=5, debug=False):
+def find_options(ticker, type, number_of_weeks=4, debug=False):
     # With a strike limit of 15 and checking 5 weeks out, we use 75 query tokens
     # If we scan 2 times an hour, the maximum number of stocks we can use in a day
     # (when the market is open - 7 hours) is 95.  Scan 4 times an hour and we can only

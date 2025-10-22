@@ -103,3 +103,6 @@ docker-run:
 
 docker-stop:
   docker stop wheel-analyzer
+
+ngrok:
+  ngrok http 8000

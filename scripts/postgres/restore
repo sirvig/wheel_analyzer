@@ -1,5 +1,13 @@
 #!/bin/sh -e
 
+# Extract username and password
+DATABASE_URL_CLEANED="${DATABASE_URL#*//}"          # Remove everything up to '//' 
+POSTGRES_USER="${DATABASE_URL_CLEANED%%:*}"               # Get the part before the first ':'
+POSTGRES_DB="${DATABASE_URL_CLEANED##*/}"                # Get the part after the first ':'
+
+PASSWORD="${DATABASE_URL_CLEANED#*:}"         # Remove everything up to the first ':'
+POSTGRES_PASS="${PASSWORD%%@*}"               # Get the part before the '@'
+
 # The directory where backups are stored
 BACKUP_DIRECTORY="/backups"
 
@@ -22,9 +30,6 @@ else
     echo "File ${file_name} does not exist."
     exit 1
 fi
-
-export POSTGRES_USER="${POSTGRES_USER}"
-export POSTGRES_DB="${POSTGRES_DB}"
 
 echo "Dropping the database..."
 dropdb "$POSTGRES_DB" -U "$POSTGRES_USER"

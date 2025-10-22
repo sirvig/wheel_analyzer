@@ -1,17 +1,29 @@
 #!/bin/sh -e
 
+# Load the .env file
+set -a
+source .env
+set +a
+
 echo "Backup process started."
 
-export POSTGRES_USER="${POSTGRES_USER}"
+# Extract username and password
+DATABASE_URL_CLEANED="${DATABASE_URL#*//}"          # Remove everything up to '//' 
+POSTGRES_USER="${DATABASE_URL_CLEANED%%:*}"               # Get the part before the first ':'
+POSTGRES_DB="${DATABASE_URL_CLEANED##*/}"                # Get the part after the first ':'
+
+PASSWORD="${DATABASE_URL_CLEANED#*:}"         # Remove everything up to the first ':'
+POSTGRES_PASS="${PASSWORD%%@*}"               # Get the part before the '@'
+
 
 # Save the current date in YYYY-MM-DD format to a variable
 current_datetime=$(date +%Y-%m-%d-%H%M%S)
 
 backup_directory="/backups"
-backup_filename="${backup_directory}/backup-${current_datetime}.dump.gz"
+backup_filename="${backup_directory}/backup-${POSTGRES_DB}-${current_datetime}.dump.gz"
 
 # Run pg_dump and compress its output, then save to /backups with the current date in the filename
-pg_dump -Fc app -U "$POSTGRES_USER" | gzip > "$backup_filename"
+pg_dump -Fc $POSTGRES_DB -U "$POSTGRES_USER" | gzip > "$backup_filename"
 
 
 echo "Backup has been created and saved to ${backup_filename}"
