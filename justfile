@@ -85,7 +85,7 @@ build:
   version="latest"
   image_full_name="{{registry}}/{{namespace}}/${image}"
   tagged_name="${image_full_name}:${version}"
-  docker build -t $tagged_name .
+  docker build --platform linux/amd64 -t $tagged_name .
   docker images $tagged_name
   docker history $tagged_name
   [[ "${PUSH:-}" != "true" ]] || just push "${image_full_name}" "${version}"
