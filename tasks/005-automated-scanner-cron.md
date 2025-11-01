@@ -1,5 +1,9 @@
 # Task 005: Implement Automated Scanner Cron Job Deployment
 
+**Implementation Location**: `/Users/danvigliotti/Development/Webvig/webvig-ansible/playbooks/deploy_wheel_analyzer.yml`
+
+This task is implemented in the separate webvig-ansible repository. The deployment playbook includes cron job configuration as part of the comprehensive Wheel Analyzer deployment to Docker Swarm.
+
 ## Progress Summary
 
 **Status**: Not Started

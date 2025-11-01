@@ -1,5 +1,9 @@
 # Task 003: Deploy PostgreSQL Database and Run Django Migrations
 
+**Implementation Location**: `/Users/danvigliotti/Development/Webvig/webvig-ansible/playbooks/deploy_wheel_analyzer.yml`
+
+This task is implemented in the separate webvig-ansible repository. The deployment playbook includes PostgreSQL deployment as part of the comprehensive Wheel Analyzer deployment to Docker Swarm.
+
 ## Progress Summary
 
 **Status**: Not Started

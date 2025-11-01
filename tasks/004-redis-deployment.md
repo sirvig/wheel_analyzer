@@ -1,5 +1,9 @@
 # Task 004: Deploy Redis Cache Using Docker Swarm
 
+**Implementation Location**: `/Users/danvigliotti/Development/Webvig/webvig-ansible/playbooks/deploy_wheel_analyzer.yml`
+
+This task is implemented in the separate webvig-ansible repository. The deployment playbook includes Redis deployment as part of the comprehensive Wheel Analyzer deployment to Docker Swarm.
+
 ## Progress Summary
 
 **Status**: Not Started
