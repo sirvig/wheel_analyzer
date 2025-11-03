@@ -20,9 +20,12 @@ DEBUG = env("DEBUG", default=False)
 
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", default="*,").split(",")
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'https://*.ngrok-free.app',
+    f"https://{host}" if not host.startswith(("http://", "https://")) else host
+    for host in ALLOWED_HOSTS
 ]
+
+if "localhost" in ALLOWED_HOSTS:
+    CSRF_TRUSTED_ORIGINS.append("http://localhost")
 
 # Application definition
 
