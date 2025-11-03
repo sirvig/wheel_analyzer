@@ -1,48 +1,169 @@
-# Project Overview
+# GEMINI.md
 
-This project is a Django-based web application called "Wheel Analyzer". It appears to be designed for tracking and analyzing stock options, possibly related to the "wheel" strategy.
+This file provides guidance to Gemini when working with code in this repository.
 
-The application is divided into two main Django apps:
+## Project Overview
 
-*   **`tracker`**: This app seems to be responsible for tracking options trading campaigns and individual transactions. It includes models for `Campaign` and `Transaction`, and views for listing and creating these items.
-*   **`scanner`**: This app appears to provide tools for scanning and analyzing options. It includes views for listing options for a given stock ticker.
+Wheel Analyzer is a Django-based web application for tracking and analyzing stock options trading, specifically focused on the "wheel strategy" (selling puts, taking assignment, selling calls). The application helps track options campaigns, individual transactions, and scan for new trading opportunities.
 
-The project uses the following key technologies:
+## Technology Stack
 
-*   **Backend**: Django, Python
-*   **Frontend**: HTML, CSS, JavaScript, with [HTMX](https://htmx.org/) for dynamic updates.
-*   **Database**: PostgreSQL
-*   **Authentication**: `django-allauth`
-*   **Development Environment**: Docker, with `docker-compose` for orchestration.
-*   **Task Runner**: `just`
+- **Backend**: Django 5.1+, Python 3.12+
+- **Database**: PostgreSQL 14.1
+- **Cache/Queue**: Redis 6.2
+- **Frontend**: HTMX for dynamic updates, vanilla JavaScript
+- **Package Management**: uv (fast Python package installer)
+- **Task Runner**: just (Makefile alternative in Rust)
+- **Deployment**: Docker with docker-compose
+- **Linting/Formatting**: ruff
 
-# Building and Running
+## Development Commands
 
-The project uses Docker for its development environment and `just` as a task runner to simplify common commands.
+This project uses `just` as the task runner. All commands below should be run with `just <command>`.
 
-## Initial Setup
+### Essential Commands
 
-1.  Copy the example environment file: `cp .env.example .env`
-2.  Create the Docker network: `docker network create app_main`
-3.  Build and start the services: `docker-compose up -d --build`
+- `just test` - Run pytest test suite (requires PostgreSQL on port 65432)
+- `just test <path>` - Run specific test file or directory
+- `just lint` - Format and check code with ruff
+- `just run` or `just runserver` - Start Django development server (local, not Docker)
+- `just up` - Start Docker services (PostgreSQL and Redis)
+- `just kill` - Stop Docker services
+- `just dbconsole` - Open PostgreSQL console
 
-## Common Commands
+### Django Management Commands
 
-The `justfile` provides several shortcuts for common development tasks:
+Use `just exec python manage.py <command>` for Docker environment, or `uv run manage.py <command>` for local development.
 
-*   **List all commands**: `just --list`
-*   **Run the development server**: `just run`
-*   **Run tests**: `just test`
-*   **Run tests on file changes**: `just test-watch`
-*   **Lint the code**: `just lint`
-*   **Create database migrations**: `just exec python manage.py makemigrations`
-*   **Run database migrations**: `just exec python manage.py migrate`
-*   **Backup the database**: `just backup`
-*   **Restore the database**: `just restore <backup-file>`
+#### Standard Django Commands
+- `just exec python manage.py makemigrations` - Generate migrations from model changes
+- `just exec python manage.py migrate` - Apply database migrations
+- `just exec python manage.py createsuperuser` - Create admin user
 
-# Development Conventions
+#### Custom Management Commands
+- `just options <args>` - Run `find_options` command to scan for options opportunities
+- `just roll <args>` - Run `find_rolls` command to find roll opportunities
+- `just scan <args>` - Run `cron_scanner` to scan and cache options data
+- `just sma <args>` - Run `cron_sma` to calculate simple moving averages
+- `just premium <args>` - Run `calculate_minimum_premium` command
 
-*   **Code Formatting**: The project uses `ruff` for code formatting and linting. You can run `just lint` to format the code.
-*   **Testing**: Tests are located in the `tests` directory within each app. The project uses `pytest-django` for testing. Tests are integrational and require a database connection.
-*   **Database Migrations**: Django's built-in migration system is used to manage database schema changes.
-*   **Static Files**: Static files (CSS, JavaScript, images) are managed by `whitenoise`.
+### Database Operations
+
+- `just backup` - Backup database to `/backups/` in container
+- `just mount-docker-backup` - Copy all backups to local machine
+- `just mount-docker-backup <filename>` - Copy specific backup file
+- `just restore <backup-file>` - Restore database from backup file
+
+### Redis Operations
+
+- `just redis-cli <args>` - Access Redis CLI (password: myStrongPassword, port: 36379)
+
+### Docker Operations
+
+- `just build` - Build Docker image for deployment
+- `just docker-run` - Run built Docker image locally
+- `just docker-stop` - Stop running Docker container
+
+## Architecture
+
+**Development Context:**
+- See @reference/ROADMAP.md for current status and next steps
+- Task-based development workflow with numbered tasks in the `/tasks` directory
+
+### Django Apps
+
+**tracker**: Core application for tracking options trading campaigns and transactions
+- Models: `User` (custom auth user), `Account`, `Campaign`, `Transaction`
+- Tracks complete trading history per campaign (stock + account combination)
+- Transaction types: put, call, roll, buy, sell, btc (buy to close), div (dividend)
+- Custom QuerySets via managers: `CampaignsQuerySet`, `TransactionsQuerySet`
+
+**scanner**: Options scanning and analysis tools
+- Models: `OptionsWatch` - watchlist for stocks to monitor
+- External integrations:
+  - `scanner/marketdata/` - Market data API wrapper for fetching options chains
+  - `scanner/alphavantage/` - Alpha Vantage API integration for technical analysis (SMA calculations)
+- Custom management commands for scanning and analyzing options data
+- Caches options data in Redis for performance
+
+### Key Files
+
+- `wheel_analyzer/settings.py` - Django settings, uses `django-environ` for configuration
+- `pyproject.toml` - Python dependencies managed by uv
+- `justfile` - Task runner definitions
+- `docker-compose.yml` - Local development services (PostgreSQL, Redis)
+- `Dockerfile` - Production container build
+
+### External Services
+
+- **PostgreSQL**: Port 65432 (local dev), credentials from `.env`
+- **Redis**: Port 36379, password: "myStrongPassword"
+- Database connection via `DATABASE_URL` environment variable (parsed by `dj-database-url`)
+
+### Authentication
+
+- Custom user model: `tracker.User` (extends `AbstractUser`)
+- Uses `django-allauth` for authentication flows
+- Login redirect: `index` (home page)
+
+### Static Files
+
+- Managed by `whitenoise` for efficient serving
+- Static files in `static/`, templates in `templates/`
+- Compressed manifest storage in production
+
+### Testing
+
+- Uses `pytest-django` for testing framework
+- All tests are integration tests requiring database connection
+- Test database: PostgreSQL on localhost:65432
+- Test environment set via `ENVIRONMENT=TESTING` in pytest config
+- Run tests with `just test` (or `uv run pytest` directly)
+
+### Logging
+
+- JSON formatted logs via custom `wheel_analyzer.logs.JSONFormatter`
+- Django errors logged at ERROR level
+- Application logs at INFO level
+- All logs output to stdout
+
+## Development Workflow
+
+### Initial Setup
+
+1. Ensure `.env` file exists (copy from `.env.example` if needed)
+2. Create Docker network: `docker network create app_main`
+3. Start services: `just up`
+4. Run migrations: `just exec python manage.py migrate`
+5. Create superuser: `just exec python manage.py createsuperuser`
+
+### Local Development (without Docker for app)
+
+The Django application can run locally while using Docker only for PostgreSQL and Redis:
+
+1. Start services: `just up`
+2. Run development server: `just run`
+3. Run tests: `just test`
+
+### Migration Workflow
+
+1. Modify models in `tracker/models.py` or `scanner/models.py`
+2. Generate migrations: `just exec python manage.py makemigrations`
+3. Review generated migration files
+4. Apply migrations: `just exec python manage.py migrate`
+5. To downgrade: `just exec python manage.py showmigrations` then `just exec python manage.py migrate <app> <migration_number>`
+
+## Code Conventions
+
+- Custom QuerySets defined in `managers.py` files within each app
+- Factories for testing in `factories.py` (using factory_boy)
+- Forms in `forms.py` files
+- Filters in `filters.py` (using django-filter)
+- Template tags in `templatetags/` directories
+- Tests in `tests/` directories within apps
+- Timezone: US/Eastern
+
+**Development Context:**
+- See @reference/ROADMAP.md for current status and next steps
+- Task-based development workflow with numbered tasks in `/tasks` directory
+- **Current Status**: In planning phase

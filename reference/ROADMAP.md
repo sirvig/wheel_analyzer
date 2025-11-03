@@ -39,41 +39,18 @@ Wheel Analyzer looks through a curated list of stocks, finds their options for a
 
 Detailed implementation tasks are tracked in the `/tasks` directory:
 
-- **Task 001**: Establish Task Tracking System - See: `/tasks/001-task-tracking.md`
-- **Task 002**: Consolidate Ansible Deployment into Wheel-Analyzer - See: `/tasks/002-ansible-consolidation.md`
-- **Task 003**: Deploy PostgreSQL Database and Run Django Migrations - See: `/tasks/003-postgres-deployment.md`
-- **Task 004**: Deploy Redis Cache Using Docker Swarm - See: `/tasks/004-redis-deployment.md`
-- **Task 005**: Implement Automated Scanner Cron Job Deployment - See: `/tasks/005-automated-scanner-cron.md`
 
 ## Development Phases
 
-### Phase 1: Option scanner MVP
+### Phase 1: Curated Stock List
 
-**Status**: In Progress
+**Status**: Not Started
 
-**Related Tasks**: Task 002, Task 003, Task 004, Task 005
+**Related Tasks**:
 
-#### Automated Scanning Deployment
-
-Deploy automated options scanning via cron job on uss-web1 server:
-
-1. **Deploy `.env.docker` file**:
-   - Ansible task uses template module to render `templates/.env.docker.j2`
-   - Rendered file placed at `/etc/wheel-analyzer/.env.docker` on uss-web1
-   - File permissions set to `0600` to protect sensitive environment variables
-
-2. **Create Cron Job**:
-   - Ansible task uses cron module to add cron entry on uss-web1
-   - Schedule: `*/15 10-16 * * *` (every 15 minutes between 10 AM and 4 PM)
-   - Command:
-     ```bash
-     docker run --rm --network app_main --env-file /etc/wheel-analyzer/.env.docker ghcr.io/sirvig/wheel-analyzer:latest uv run manage.py cron_scanner
-     ```
-   - `--rm`: Automatically remove container after exit
-   - `--network app_main`: Connect to existing Docker network for Redis/PostgreSQL access
-   - `--env-file`: Load environment variables from deployed file
-   - `ghcr.io/sirvig/wheel-analyzer:latest`: Use pre-pulled Docker image
-   - `uv run manage.py cron_scanner`: Execute scanner management command
+- `001-curated-stock-model.md`
+- `002-data-migration.md`
+- `003-update-scanner.md`
 
 ### Phase 2: Fair value calculation automation
 

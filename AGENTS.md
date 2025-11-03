@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to opencode when working with code in this repository.
 
 ## Project Overview
 
@@ -167,3 +167,4 @@ The Django application can run locally while using Docker only for PostgreSQL an
 - See @reference/ROADMAP.md for current status and next steps
 - Task-based development workflow with numbered tasks in `/tasks` directory
 - **Current Status**: In planning phase
+  
