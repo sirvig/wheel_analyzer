@@ -7,3 +7,16 @@ nav {
     color: white;
     background-color: #182c34;
 }
+
+/* HTMX indicator styles */
+.htmx-indicator {
+    display: none;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.htmx-request .htmx-non-indicator {
+    display: none;
+}

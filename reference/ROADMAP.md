@@ -55,8 +55,43 @@ Detailed implementation tasks are tracked in the `/tasks` directory:
 **Summary**:
 Successfully migrated from JSON-based stock management to a database-driven CuratedStock model. The scanner commands (`cron_sma` and `cron_scanner`) now query active stocks from the database, enabling dynamic stock management through the Django admin interface. All 26 stocks were successfully imported and verified. See task files for detailed implementation notes.
 
-### Phase 2: Fair value calculation automation
+### Phase 2: Manual Scan Trigger
 
-**Status**: Not Started
+**Status**: ✅ Completed
 
-**Related Tasks**: To be defined
+**Related Tasks**:
+
+- ✅ `004-refactor-scan-logic.md` - Refactored core scan logic into a reusable function
+- ✅ `005-backend-scan-view.md` - Implemented backend view and URL for manual scanning
+- ✅ `006-frontend-scan-button.md` - Added button to the frontend to trigger the scan
+
+**Summary**:
+Successfully implemented manual scan functionality for the scanner page. Users can now trigger an on-demand options scan by clicking the "Scan for Options" button. The implementation includes:
+- Extracted core scanning logic from `cron_scanner` management command into reusable `perform_scan()` function in `scanner/scanner.py`
+- Created Django view with Redis locking mechanism (10-minute timeout) to prevent concurrent scans
+- Added HTMX-powered button with loading indicator for seamless user experience
+- Created dedicated partial template (`scanner/partials/options_results.html`) for HTMX updates
+- Comprehensive error handling with user-friendly messages for different scenarios (scan in progress, market closed, errors)
+See task files for detailed implementation notes.
+
+### Phase 3: Polling for Scan Progress
+
+**Status**: ✅ Completed
+
+**Related Tasks**:
+
+- ✅ `007-async-scan-view.md` - Refactor scan view for asynchronous execution
+- ✅ `008-polling-status-endpoint.md` - Create polling status endpoint
+- ✅ `009-frontend-polling-trigger.md` - Update frontend to trigger polling
+
+**Summary**:
+Successfully implemented a polling mechanism with progressive results display for the manual options scan feature. Users now see real-time feedback as the scan progresses, with options appearing as they're found. The implementation includes:
+- Refactored `scan_view` to execute scans in background threads using Python's `threading` module
+- Created `scan_status` polling endpoint that returns updated results every 15 seconds
+- Built `scan_polling.html` template with animated status banner showing progress percentage
+- Progressive results display: users see options appearing in real-time as each ticker is scanned
+- Error handling: error messages from scan failures display in the status area
+- Multi-user support: multiple users can watch the same scan progress simultaneously
+- Graceful polling termination: when scan completes, polling automatically stops and final results display
+- HTMX-powered frontend with `outerHTML` swap for seamless state transitions
+See task files for detailed implementation notes.

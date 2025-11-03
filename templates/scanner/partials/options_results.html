@@ -1,0 +1,39 @@
+{% load options_extras %}
+
+<div class="mb-4">
+    Last scan: {{ last_scan }}<br />
+    NOTE: Scans only happen between 9:30-4:00 EST on trading days.<br />
+</div>
+
+{% if ticker_options %}
+<p class="mb-4">The following tickers have PUT options with a delta of .20 or less and an annualized return of 30% or more.</p>
+{% else %}
+<p class="mb-4">No options found.</p>
+{% endif %}
+
+<div id="accordion-collapse" data-accordion="collapse">
+{% for ticker, options in ticker_options.items %}
+  <h2 id="accordion-collapse-heading-{{ forloop.counter }}">
+    <button type="button" class="flex items-center justify-between w-full p-5 font-medium rtl:text-right text-gray-500 border border-b-0 border-gray-200 rounded-t-xl focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-800 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 gap-3" data-accordion-target="#accordion-collapse-body-{{ forloop.counter }}" aria-expanded="false" aria-controls="accordion-collapse-body-{{ forloop.counter }}">
+      <span>{{ ticker }} - last scan: {{ ticker_scan|lookup:ticker }}</span>
+      <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5 5 1 1 5"/>
+      </svg>
+    </button>
+  </h2>
+  <div id="accordion-collapse-body-{{ forloop.counter }}" class="hidden" aria-labelledby="accordion-collapse-heading-{{ forloop.counter }}">
+    <div class="p-5 border border-b-0 border-gray-200 dark:border-gray-700 dark:bg-gray-900">
+        <ul>
+            {% for option in options %}
+                {% ifchanged option.date %}
+                    {% if not forloop.first %}
+                    <li>---------------------------------</li>
+                    {% endif %}
+                {% endifchanged %}
+            <li><p class="mb-2 text-gray-500 dark:text-gray-400">{{ option.date }} Strike: ${{ option.strike }} Price: ${{ option.price|floatformat:2 }} Change: {{ option.change|floatformat:2 }}% Delta: {{ option.delta|floatformat:2 }} Annualized: {{ option.annualized|floatformat:2 }}% IV: {{ option.iv|floatformat:2 }}</p></li>
+            {% endfor %}
+        </ul>
+    </div>
+  </div>
+{% endfor %}
+</div>
