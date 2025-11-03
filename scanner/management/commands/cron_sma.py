@@ -1,12 +1,11 @@
-import json
 import logging
 import os
 
 import redis
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from scanner.alphavantage.technical_analysis import find_sma
+from scanner.models import CuratedStock
 
 logger = logging.getLogger(__name__)
 DEBUG = False
@@ -25,17 +24,12 @@ class Command(BaseCommand):
         DEBUG = options["debug"]
         r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
 
-        # Define the path to the JSON file
-        json_file_path = os.path.join(
-            f"{settings.BASE_DIR}/scanner/data", "options.json"
+        # Get active stocks from database
+        tickers = CuratedStock.objects.filter(active=True).values_list(
+            "symbol", flat=True
         )
 
-        # Read the JSON file
-        with open(json_file_path, "r") as file:
-            data = json.load(file)
-
-        contract_type = "put"
-        for ticker in data[contract_type]:
+        for ticker in tickers:
             logger.debug(f"Finding SMA for {ticker}")
             fifty_day_sma = find_sma(ticker, 50)
             two_hundred_day_sma = find_sma(ticker, 200)

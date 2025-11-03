@@ -2,7 +2,16 @@ import factory
 
 from tracker.factories import UserFactory
 
-from .models import OptionsWatch
+from .models import CuratedStock, OptionsWatch
+
+
+class CuratedStockFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CuratedStock
+
+    symbol = factory.Sequence(lambda n: f"TST{n:02d}")
+    active = True
+    notes = factory.Faker("sentence")
 
 
 class OptionsWatchFactory(factory.django.DjangoModelFactory):

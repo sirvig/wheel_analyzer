@@ -4,11 +4,11 @@ import os
 from datetime import datetime
 
 import redis
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from scanner.marketdata.options import find_options
 from scanner.marketdata.util import is_market_open
+from scanner.models import CuratedStock
 
 logger = logging.getLogger(__name__)
 DEBUG = False
@@ -27,14 +27,10 @@ class Command(BaseCommand):
         DEBUG = options["debug"]
         r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
 
-        # Define the path to the JSON file
-        json_file_path = os.path.join(
-            f"{settings.BASE_DIR}/scanner/data", "options.json"
+        # Get active stocks from database
+        tickers = list(
+            CuratedStock.objects.filter(active=True).values_list("symbol", flat=True)
         )
-
-        # Read the JSON file
-        with open(json_file_path, "r") as file:
-            data = json.load(file)
 
         test_open = is_market_open()
         if not test_open and not DEBUG:
@@ -43,9 +39,9 @@ class Command(BaseCommand):
 
         # Find puts
         contract_type = "put"
-        total_tickers = len(data[contract_type])
+        total_tickers = len(tickers)
         counter = 0
-        for ticker in data[contract_type]:
+        for ticker in tickers:
             logger.debug(f"Finding options for {ticker}")
 
             # Calculate the percentage of the loop remaining
