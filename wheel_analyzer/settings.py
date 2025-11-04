@@ -53,9 +53,7 @@ INSTALLED_APPS = [
 ]
 
 # htmx support for debug toolbar
-DEBUG_TOOLBAR_CONFIG = {
-    "ROOT_TAG_EXTRA_ATTRS": "hx-preserve"
-}
+DEBUG_TOOLBAR_CONFIG = {"ROOT_TAG_EXTRA_ATTRS": "hx-preserve"}
 
 SITE_ID = 1
 
@@ -129,7 +127,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-AUTH_USER_MODEL = 'tracker.User'
+AUTH_USER_MODEL = "tracker.User"
 
 
 # Internationalization
@@ -163,6 +161,7 @@ INTERNAL_IPS = [
 ]
 
 AUTH_USER_MODEL = "tracker.User"
+LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "index"
 
 LOGGING = {

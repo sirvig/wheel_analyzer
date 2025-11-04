@@ -12,9 +12,6 @@
                     Scan in progress...
                 {% endif %}
             {% endwith %}
-        {% elif "Market is closed" in last_scan or "error" in last_scan or "An error occurred" in last_scan %}
-            <!-- Error state (4c: Display error message from last_run) -->
-            {{ last_scan }}
         {% else %}
             Scan in progress...
         {% endif %}

@@ -2,8 +2,10 @@ import json
 import logging
 import os
 import threading
+from datetime import datetime
 
 import redis
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
@@ -15,6 +17,7 @@ SCAN_LOCK_KEY = "scan_in_progress"
 SCAN_LOCK_TIMEOUT = 600  # 10 minutes
 
 
+@login_required
 def index(request):
     r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
     keys = r.keys("put_*")
@@ -38,6 +41,7 @@ def index(request):
     return render(request, "scanner/index.html", context)
 
 
+@login_required
 def options_list(request, ticker):
     r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
     hash_key = f"put_{ticker}"
@@ -63,6 +67,9 @@ def run_scan_in_background():
         result = perform_scan(debug=False)
 
         if result["success"]:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            completion_message = f"Scan completed successfully at {timestamp}"
+            r.set("last_run", completion_message)
             logger.info(
                 f"Background scan completed successfully: {result['scanned_count']} tickers"
             )
@@ -118,6 +125,7 @@ def get_scan_results():
     }
 
 
+@login_required
 @require_POST
 def scan_view(request):
     r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
@@ -136,6 +144,10 @@ def scan_view(request):
 
     # Set the lock with a timeout to prevent it from getting stuck
     r.setex(SCAN_LOCK_KEY, SCAN_LOCK_TIMEOUT, "1")
+
+    # Set initial status before starting scan
+    r.set("last_run", "Scanning in progress...")
+
     logger.info("Starting manual scan in background thread")
 
     # Start the scan in a background thread
@@ -149,6 +161,7 @@ def scan_view(request):
     return render(request, "scanner/partials/scan_polling.html", context)
 
 
+@login_required
 def scan_status(request):
     r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
     """
