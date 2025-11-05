@@ -95,3 +95,65 @@ Successfully implemented a polling mechanism with progressive results display fo
 - Graceful polling termination: when scan completes, polling automatically stops and final results display
 - HTMX-powered frontend with `outerHTML` swap for seamless state transitions
 See task files for detailed implementation notes.
+
+### Phase 4: Calculate fair value for stocks in the curated list
+
+**Status**: In Progress
+
+**Related Tasks**:
+
+- ⏳ `013-add-intrinsic-value-fields.md` - Add database fields to CuratedStock model for intrinsic value and DCF assumptions
+- ⏳ `014-dcf-calculation-functions.md` - Create DCF calculation utility functions (EPS-based)
+- ⏳ `015-valuation-management-command.md` - Create weekly management command to calculate intrinsic values
+- ⏳ `016-valuation-testing.md` - Add comprehensive unit and integration tests
+
+**Summary**:
+Implement a weekly valuation system that calculates the intrinsic value (fair value) of stocks in the curated list using an EPS-based Discounted Cash Flow (DCF) model. The system will:
+
+**EPS-based DCF Process** (Initial Implementation):
+1. **Project EPS**: Calculate projected EPS for 5 years using configurable growth rate
+2. **Terminal Value**: Calculate terminal value as Final Year EPS × EPS Multiple
+3. **Present Value of Projected EPS**: Discount each year's projected EPS to present value using desired return rate
+4. **Present Value of Terminal Value**: Discount terminal value to present value
+5. **Intrinsic Value**: Sum all present values to determine fair value per share
+
+**Implementation Details**:
+- **Database Fields**: Add to CuratedStock model:
+  - Calculation results: `intrinsic_value`, `last_calculation_date`
+  - DCF assumptions: `current_eps`, `eps_growth_rate` (default: 10%), `eps_multiple` (default: 20), `desired_return` (default: 15%), `projection_years` (default: 5)
+- **Data Source**: Fetch current EPS from Alpha Vantage OVERVIEW endpoint
+- **Assumptions**: Manually configurable per stock via Django admin
+- **Caching**: Redis cache for API responses (7-day TTL)
+- **Rate Limiting**: 12-second delays between API calls (5 calls/minute limit)
+- **Execution**: Django management command (`calculate_intrinsic_value`) scheduled for Monday evenings
+- **Error Handling**: Skip stocks with missing/invalid data, log errors, continue processing
+
+**DCF Formula**:
+```
+Projected EPS[year] = Current EPS × (1 + growth_rate)^year
+Terminal Value = Projected EPS[Year 5] × EPS Multiple
+PV of EPS[year] = Projected EPS[year] / (1 + desired_return)^year
+PV of Terminal = Terminal Value / (1 + desired_return)^5
+Intrinsic Value = Sum(PV of all Projected EPS) + PV of Terminal Value
+```
+
+**FCF-based DCF** (Future Enhancement):
+Deferred to future phase. Will require research on data sources for Free Cash Flow per share.
+
+**Testing**:
+- Unit tests for DCF calculation accuracy
+- Integration tests with mocked API responses
+- Performance tests to ensure scalability
+- Optional live API tests for validation
+
+See task files for detailed implementation specifications.
+
+### Phase 5: Update Option Scanner to provide a visual representation of intrinsic value
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+The goal here is to present the user with a visual representation that the option strike price is at or below the intrinsic value calculated above.
+When the Scan for options job is run and options are found to be displayed - if the option strike price is at or below the intrinsic value that was last calculated there should be a green light added.  If its above the intrinsic value, a red light should be added.  If any of the options found for a stock are at or below the intrinsic value, a green light should be added to the accordian tab as well.  Otherwise a red light should be added.
