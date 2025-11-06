@@ -16,7 +16,8 @@ def get_base_url():
 def get_market_data(url):
     data = {}
     base_url = get_base_url()
-    request_url = f"{base_url}{url}&apikey={get_api_key()}"
+    api_key = get_api_key()
+    request_url = f"{base_url}?{url}&apikey={get_api_key()}"
     response = requests.get(request_url)
 
     # Checking if the request was successful

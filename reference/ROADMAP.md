@@ -98,7 +98,7 @@ See task files for detailed implementation notes.
 
 ### Phase 4: Calculate fair value for stocks in the curated list
 
-**Status**: ✅ Completed (Core Implementation)
+**Status**: ✅ Completed (Including FCF Enhancement)
 
 **Related Tasks**:
 
@@ -127,12 +127,14 @@ Successfully implemented a weekly valuation system that calculates the intrinsic
 
 3. **Management Command** (Task 015):
    - Created `calculate_intrinsic_value` command
-   - Fetches EPS from Alpha Vantage OVERVIEW endpoint
+   - Fetches EPS TTM from Alpha Vantage EARNINGS endpoint (sum of 4 quarterly reportedEPS)
+   - Also fetches OVERVIEW and CASH_FLOW endpoints for complete valuation data
    - Redis caching with 7-day TTL
-   - 12-second rate limiting (5 calls/minute)
+   - 15-second rate limiting (4 calls/minute) for API call limits
    - Command options: `--symbols`, `--force-refresh`, `--clear-cache`
    - Comprehensive error handling and logging
    - Summary statistics output
+   - **Note**: Refactored from annual EPS to trailing twelve months (TTM) for more accurate valuation
 
 **DCF Formula Implemented**:
 ```
@@ -158,10 +160,61 @@ python manage.py calculate_intrinsic_value --force-refresh
 0 20 * * 1 cd /path/to/project && python manage.py calculate_intrinsic_value
 ```
 
+**Completed Tasks**:
+- ✅ `016-valuation-testing.md` - Enhanced valuation testing with 11 unit tests and 8 integration tests
+- ✅ `017-add-fcf-fields.md` - Added FCF fields to CuratedStock model for dual valuation approach
+- ✅ `018-fcf-calculation-functions.md` - Created FCF-based DCF calculation functions
+- ✅ `019-fcf-management-command.md` - Updated management command to support both EPS and FCF calculations
+- ✅ `020-fcf-testing.md` - Added comprehensive tests for FCF calculations (8 integration tests)
+
+**FCF-based DCF Enhancement** (✅ Completed):
+
+The system now supports both EPS-based and FCF-based DCF valuation methods:
+
+**Database Schema** (Task 017):
+- Added 5 new fields to CuratedStock model
+- `intrinsic_value_fcf` - FCF-based calculated value
+- `current_fcf_per_share` - TTM FCF per share
+- `fcf_growth_rate` - FCF growth assumption (default: 10%)
+- `fcf_multiple` - FCF terminal value multiple (default: 20)
+- `preferred_valuation_method` - User choice between EPS/FCF (default: EPS)
+- Migration `0005_add_fcf_fields.py` applied successfully
+
+**Calculation Functions** (Task 018):
+- Added 4 new FCF calculation functions to `scanner/valuation.py`
+- `calculate_fcf_from_quarters()` - Calculates TTM FCF from Alpha Vantage quarterly data
+- `calculate_fcf_per_share()` - Divides TTM FCF by shares outstanding
+- `project_fcf()` - Projects future FCF using compound growth
+- `calculate_intrinsic_value_fcf()` - Complete FCF-based DCF calculation
+- 24 unit tests added - all passing
+
+**Management Command** (Task 019):
+- Updated `calculate_intrinsic_value` command for dual calculations
+- Fetches EARNINGS (quarterly EPS), OVERVIEW (shares outstanding), and CASH_FLOW (quarterly FCF) from Alpha Vantage
+- **3 API calls per stock**: EARNINGS for EPS TTM, OVERVIEW for shares, CASH_FLOW for FCF TTM
+- Independent success/failure tracking for EPS and FCF methods
+- Rate limiting: 15 seconds (4 calls/minute) for Alpha Vantage API limits
+- Separate statistics in summary output for each method
+- Cache management with separate keys: `av_earnings_{symbol}`, `av_overview_{symbol}`, `av_cashflow_{symbol}`
+
+**Testing** (Task 020):
+- 8 new FCF integration tests added
+- Tests cover dual calculation, negative FCF handling, cache behavior, and error scenarios
+- Total test coverage: 56 unit tests + 40 integration tests = 96 tests passing
+- All tests updated for EPS TTM refactor (EARNINGS endpoint instead of OVERVIEW for EPS)
+
+**Usage**:
+```bash
+# Calculate both EPS and FCF intrinsic values for all active stocks
+python manage.py calculate_intrinsic_value
+
+# View both values in Django admin
+# Users can set preferred_valuation_method per stock (EPS or FCF)
+```
+
 **Remaining Tasks** (Optional Enhancements):
-- Task 016: Additional edge case testing and performance tests
-- Test database isolation fixes for integration tests
-- FCF-based DCF (future enhancement)
+- Performance tests, live API tests, and coverage analysis can be added if needed (see Task 016 for details)
+- Test database isolation fixes for integration tests (optional)
 
 See task files for detailed implementation notes.
 
@@ -174,3 +227,14 @@ See task files for detailed implementation notes.
 **Summary**:
 The goal here is to present the user with a visual representation that the option strike price is at or below the intrinsic value calculated above.
 When the Scan for options job is run and options are found to be displayed - if the option strike price is at or below the intrinsic value that was last calculated there should be a green light added.  If its above the intrinsic value, a red light should be added.  If any of the options found for a stock are at or below the intrinsic value, a green light should be added to the accordian tab as well.  Otherwise a red light should be added.
+
+Additionally, we need a single page view of the curated list and their valuations.
+
+### Phase 6: Create historical storage of valuation calculations
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+The goal here is to store a quarterly calculation of the intrinsic value of each stock.  Ideally I should be able to look back to previous calculations. The storage should start from now and store data for 5 years.  

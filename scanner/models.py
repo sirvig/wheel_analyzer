@@ -13,27 +13,44 @@ class CuratedStock(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Calculation Results (auto-populated by calculation command)
+    # EPS Calculation Results (auto-populated by calculation command)
     intrinsic_value = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Calculated fair value per share based on DCF model",
+        help_text="Calculated fair value per share based on EPS DCF model",
     )
+    
+    # FCF Calculation Results (auto-populated by calculation command)
+    intrinsic_value_fcf = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Calculated fair value per share based on FCF DCF model",
+    )
+    current_fcf_per_share = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Trailing twelve months Free Cash Flow per share",
+    )
+    
     last_calculation_date = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When the intrinsic value was last calculated",
     )
 
-    # DCF Assumptions (manually editable in admin)
+    # EPS DCF Assumptions (manually editable in admin)
     current_eps = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Current Earnings Per Share (fetched from Alpha Vantage)",
+        help_text="Trailing Twelve Months Earnings Per Share (EPS TTM) - sum of 4 most recent quarterly reportedEPS from Alpha Vantage EARNINGS endpoint",
     )
     eps_growth_rate = models.DecimalField(
         max_digits=5,
@@ -47,6 +64,22 @@ class CuratedStock(models.Model):
         default=20.0,
         help_text="Multiple applied to terminal year EPS for terminal value",
     )
+    
+    # FCF DCF Assumptions (manually editable in admin)
+    fcf_growth_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=10.0,
+        help_text="Expected FCF growth rate (%)",
+    )
+    fcf_multiple = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=20.0,
+        help_text="Multiple applied to terminal year FCF for terminal value",
+    )
+    
+    # Shared DCF Assumptions (used by both EPS and FCF methods)
     desired_return = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -54,7 +87,18 @@ class CuratedStock(models.Model):
         help_text="Desired annual return rate (%) - used as discount rate",
     )
     projection_years = models.IntegerField(
-        default=5, help_text="Number of years to project EPS growth"
+        default=5, help_text="Number of years to project growth"
+    )
+    
+    # Valuation Display Preference
+    preferred_valuation_method = models.CharField(
+        max_length=3,
+        choices=[
+            ("EPS", "EPS-based"),
+            ("FCF", "FCF-based"),
+        ],
+        default="EPS",
+        help_text="Preferred valuation method to display",
     )
 
     def __str__(self):

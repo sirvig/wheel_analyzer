@@ -8,7 +8,7 @@ Wheel Analyzer is a Django-based web application for tracking and analyzing stoc
 
 ## Technology Stack
 
-- **Backend**: Django 5.1+, Python 3.12+
+- **Backend**: Django 5.1+, Python 3.13+
 - **Database**: PostgreSQL 14.1
 - **Cache/Queue**: Redis 6.2
 - **Frontend**: HTMX for dynamic updates, vanilla JavaScript
@@ -46,6 +46,7 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
 - `just scan <args>` - Run `cron_scanner` to scan and cache options data
 - `just sma <args>` - Run `cron_sma` to calculate simple moving averages
 - `just premium <args>` - Run `calculate_minimum_premium` command
+- `python manage.py calculate_intrinsic_value` - Calculate DCF intrinsic values for curated stocks (EPS & FCF methods)
 
 ### Database Operations
 
@@ -79,12 +80,13 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
 - Custom QuerySets via managers: `CampaignsQuerySet`, `TransactionsQuerySet`
 
 **scanner**: Options scanning and analysis tools
-- Models: `OptionsWatch` - watchlist for stocks to monitor
+- Models: `OptionsWatch` - watchlist for stocks to monitor, `CuratedStock` - stocks for valuation analysis
 - External integrations:
   - `scanner/marketdata/` - Market data API wrapper for fetching options chains
-  - `scanner/alphavantage/` - Alpha Vantage API integration for technical analysis (SMA calculations)
+  - `scanner/alphavantage/` - Alpha Vantage API integration for fundamental data (EPS, FCF) and technical analysis (SMA calculations)
 - Custom management commands for scanning and analyzing options data
-- Caches options data in Redis for performance
+- Valuation module (`scanner/valuation.py`) - DCF calculations using EPS and FCF methods
+- Caches options data and Alpha Vantage API responses in Redis for performance
 
 ### Key Files
 
@@ -166,5 +168,5 @@ The Django application can run locally while using Docker only for PostgreSQL an
 **Development Context:**
 - See @reference/ROADMAP.md for current status and next steps
 - Task-based development workflow with numbered tasks in `/tasks` directory
-- **Current Status**: In planning phase
+- **Current Status**: Phase 4 completed (DCF valuation system with EPS and FCF methods), Phase 5 (visual intrinsic value indicators) not yet started
   

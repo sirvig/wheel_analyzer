@@ -72,6 +72,9 @@ scan *args:
 
 sma *args:
     uv run manage.py cron_sma {{args}}
+    
+fair_value *args:
+    uv run manage.py calculate_intrinsic_value {{args}}
 
 premium *args:
     uv run manage.py calculate_minimum_premium {{args}}
