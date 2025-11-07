@@ -2,8 +2,13 @@
 Django management command to calculate intrinsic value for curated stocks.
 
 This command fetches EPS TTM and FCF data from Alpha Vantage and calculates
-the intrinsic value (fair value) for all active stocks in the curated list
-using both EPS-based and FCF-based DCF models.
+the intrinsic value (fair value) for stocks in the curated list using both
+EPS-based and FCF-based DCF models.
+
+The command implements a smart selection strategy to respect AlphaVantage's
+25 API calls/day limit on the free tier. By default, it processes 7 stocks
+per run (21 API calls), prioritizing never-calculated stocks and then
+selecting the oldest-calculated stocks for a rolling update approach.
 
 EPS is calculated as Trailing Twelve Months (TTM) by summing the 4 most recent
 quarterly reportedEPS values from the EARNINGS endpoint.
@@ -13,15 +18,51 @@ The command makes 3 API calls per stock:
 - OVERVIEW: to fetch SharesOutstanding (needed for FCF calculation)
 - CASH_FLOW: to calculate FCF TTM from quarterly data
 
+All API responses are cached in Redis for 7 days to minimize API usage.
+
 Usage:
+    # Default: smart select 7 stocks (21 API calls)
     python manage.py calculate_intrinsic_value
+
+    # Custom limit: process 10 stocks
+    python manage.py calculate_intrinsic_value --limit 10
+
+    # Force all: process all active stocks (shows warning if >25 calls)
+    python manage.py calculate_intrinsic_value --force-all
+
+    # Specific symbols (bypasses smart selection)
     python manage.py calculate_intrinsic_value --symbols AAPL MSFT
+
+    # Force refresh API data (bypass cache)
     python manage.py calculate_intrinsic_value --force-refresh
+
+    # Clear cache before processing
     python manage.py calculate_intrinsic_value --clear-cache
 
 Schedule:
-    Run weekly on Monday evenings via cron:
-    0 20 * * 1 cd /path/to/project && python manage.py calculate_intrinsic_value
+    Run daily at 8 PM via cron for rolling updates:
+    0 20 * * * cd /path/to/project && python manage.py calculate_intrinsic_value
+
+    With 7 stocks/day, all stocks refresh within ~7 days (for 50 stocks).
+
+Smart Selection Logic:
+    1. Prioritize stocks with NULL last_calculation_date (never calculated)
+    2. Then select stocks with oldest last_calculation_date (stale valuations)
+    3. Limit to N stocks (default: 7) to respect API quotas
+
+API Rate Limiting:
+    - AlphaVantage free tier: 25 calls/day
+    - Default: 7 stocks × 3 calls = 21 API calls (conservative)
+    - Rate limiting: 20 seconds between stocks (3 calls/minute)
+    - Cache: 7-day TTL reduces actual API calls significantly
+    - Use --force-all carefully to avoid rate limits
+
+Reporting:
+    - Detailed per-stock output with before/after values
+    - Delta and percentage change calculations
+    - API call tracking (actual calls vs cache hits)
+    - Cache hit rate statistics
+    - Remaining stocks to calculate
 """
 
 import logging
@@ -62,7 +103,18 @@ class Command(BaseCommand):
             "--symbols",
             nargs="+",
             type=str,
-            help="Specific stock symbols to calculate (default: all active stocks)",
+            help="Specific stock symbols to calculate (default: smart selection)",
+        )
+        parser.add_argument(
+            "--limit",
+            type=int,
+            default=7,
+            help="Number of stocks to process (default: 7 for ~21 API calls)",
+        )
+        parser.add_argument(
+            "--force-all",
+            action="store_true",
+            help="Process ALL active stocks (ignores --limit, may exceed API limits)",
         )
         parser.add_argument(
             "--force-refresh",
@@ -85,6 +137,10 @@ class Command(BaseCommand):
 
         start_time = timezone.now()
 
+        # Initialize API tracking counters
+        self.api_calls_made = 0
+        self.cache_hits = 0
+
         self.stdout.write(self.style.SUCCESS("Starting intrinsic value calculation..."))
 
         # Clear cache if requested
@@ -93,7 +149,11 @@ class Command(BaseCommand):
 
         # Get stocks to process
         try:
-            stocks = self._get_stocks_to_process(options.get("symbols"))
+            stocks = self._get_stocks_to_process(
+                symbols=options.get("symbols"),
+                limit=options.get("limit", 7),
+                force_all=options.get("force_all", False),
+            )
         except CommandError as e:
             self.stdout.write(self.style.ERROR(str(e)))
             return
@@ -103,6 +163,13 @@ class Command(BaseCommand):
         if total_stocks == 0:
             self.stdout.write(self.style.WARNING("No stocks to process"))
             return
+
+        # Print pre-execution summary
+        self._print_pre_execution_summary(
+            stocks,
+            force_all=options.get("force_all", False),
+            limit=options.get("limit", 7),
+        )
 
         self.stdout.write(f"Processing {total_stocks} stock(s)...")
 
@@ -119,7 +186,31 @@ class Command(BaseCommand):
                 f"\n[{index}/{total_stocks}] Processing {stock.symbol}..."
             )
 
-            # Process EPS (existing logic)
+            # Store previous values for comparison
+            prev_eps_value = stock.intrinsic_value
+            prev_fcf_value = stock.intrinsic_value_fcf
+            prev_calc_date = stock.last_calculation_date
+
+            # Show previous values
+            if prev_calc_date:
+                self.stdout.write(
+                    f"  Previous values (Last calc: {prev_calc_date.strftime('%Y-%m-%d %H:%M:%S')}):"
+                )
+                if prev_eps_value:
+                    self.stdout.write(f"    EPS intrinsic value: ${prev_eps_value}")
+                else:
+                    self.stdout.write("    EPS intrinsic value: None")
+
+                if prev_fcf_value:
+                    self.stdout.write(f"    FCF intrinsic value: ${prev_fcf_value}")
+                else:
+                    self.stdout.write("    FCF intrinsic value: None")
+            else:
+                self.stdout.write("  Previous values: Never calculated")
+
+            self.stdout.write("")  # Blank line
+
+            # Process EPS (existing logic with delta calculation)
             try:
                 eps_result = self._process_stock(
                     stock, force_refresh=options.get("force_refresh", False)
@@ -127,11 +218,28 @@ class Command(BaseCommand):
 
                 if eps_result["status"] == "success":
                     eps_success += 1
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"  ✓ EPS intrinsic value: ${eps_result['intrinsic_value']}"
+                    new_value = eps_result["intrinsic_value"]
+
+                    # Calculate delta
+                    if prev_eps_value:
+                        delta = new_value - prev_eps_value
+                        pct_change = (delta / prev_eps_value) * 100
+                        delta_str = (
+                            f"(+${delta:.2f}, +{pct_change:.2f}%)"
+                            if delta >= 0
+                            else f"(${delta:.2f}, {pct_change:.2f}%)"
                         )
-                    )
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                f"  ✓ EPS intrinsic value: ${new_value} {delta_str}"
+                            )
+                        )
+                    else:
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                f"  ✓ EPS intrinsic value: ${new_value} (new)"
+                            )
+                        )
                 elif eps_result["status"] == "skipped":
                     eps_skipped += 1
                     self.stdout.write(
@@ -144,12 +252,13 @@ class Command(BaseCommand):
                 )
                 self.stdout.write(self.style.ERROR(f"  ✗ EPS error: {str(e)}"))
 
-            # Process FCF (new logic)
+            # Process FCF (new logic with delta calculation)
             # Get overview_data for shares outstanding
             try:
                 # Fetch overview data (may be cached from EPS processing)
                 overview_data = self._fetch_eps_data(
-                    stock.symbol, force_refresh=False  # Use cache if available
+                    stock.symbol,
+                    force_refresh=False,  # Use cache if available
                 )
 
                 if overview_data and "SharesOutstanding" in overview_data:
@@ -161,11 +270,28 @@ class Command(BaseCommand):
 
                     if fcf_result["status"] == "success":
                         fcf_success += 1
-                        self.stdout.write(
-                            self.style.SUCCESS(
-                                f"  ✓ FCF intrinsic value: ${fcf_result['intrinsic_value_fcf']}"
+                        new_fcf_value = fcf_result["intrinsic_value_fcf"]
+
+                        # Calculate delta
+                        if prev_fcf_value:
+                            delta = new_fcf_value - prev_fcf_value
+                            pct_change = (delta / prev_fcf_value) * 100
+                            delta_str = (
+                                f"(+${delta:.2f}, +{pct_change:.2f}%)"
+                                if delta >= 0
+                                else f"(${delta:.2f}, {pct_change:.2f}%)"
                             )
-                        )
+                            self.stdout.write(
+                                self.style.SUCCESS(
+                                    f"  ✓ FCF intrinsic value: ${new_fcf_value} {delta_str}"
+                                )
+                            )
+                        else:
+                            self.stdout.write(
+                                self.style.SUCCESS(
+                                    f"  ✓ FCF intrinsic value: ${new_fcf_value} (new)"
+                                )
+                            )
                     elif fcf_result["status"] == "skipped":
                         fcf_skipped += 1
                         self.stdout.write(
@@ -195,7 +321,10 @@ class Command(BaseCommand):
         end_time = timezone.now()
         duration = (end_time - start_time).total_seconds()
 
-        self.stdout.write(self.style.SUCCESS(f"\n{'=' * 60}"))
+        # Get remaining work stats
+        remaining_stats = self._get_calculation_stats()
+
+        self.stdout.write(self.style.SUCCESS(f"\n{'=' * 65}"))
         self.stdout.write(self.style.SUCCESS("SUMMARY:"))
         self.stdout.write(self.style.SUCCESS(f"  Total processed: {total_stocks}"))
         self.stdout.write(self.style.SUCCESS("\n  EPS Method:"))
@@ -206,8 +335,28 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"    Successful: {fcf_success}"))
         self.stdout.write(self.style.WARNING(f"    Skipped: {fcf_skipped}"))
         self.stdout.write(self.style.ERROR(f"    Errors: {fcf_error}"))
+
+        # API usage statistics
+        self.stdout.write(self.style.SUCCESS("\n  API USAGE:"))
+        self.stdout.write(f"    API calls made: {self.api_calls_made}")
+        self.stdout.write(f"    Cache hits: {self.cache_hits}")
+        total_requests = self.api_calls_made + self.cache_hits
+        if total_requests > 0:
+            cache_hit_rate = (self.cache_hits / total_requests) * 100
+            self.stdout.write(f"    Cache hit rate: {cache_hit_rate:.2f}%")
+
+        # Remaining work
+        self.stdout.write(self.style.SUCCESS("\n  REMAINING WORK:"))
+        self.stdout.write(
+            f"    Stocks never calculated: {remaining_stats['never_calculated']}"
+        )
+        self.stdout.write(
+            f"    Stocks previously calculated: {remaining_stats['previously_calculated']}"
+        )
+        self.stdout.write(f"    Total active stocks: {remaining_stats['total']}")
+
         self.stdout.write(self.style.SUCCESS(f"\n  Duration: {duration:.2f} seconds"))
-        self.stdout.write(self.style.SUCCESS(f"{'=' * 60}\n"))
+        self.stdout.write(self.style.SUCCESS(f"{'=' * 65}\n"))
 
         # Log command completion
         logger.info("=" * 60)
@@ -218,20 +367,35 @@ class Command(BaseCommand):
         logger.info(
             f"FCF - Success: {fcf_success}, Skipped: {fcf_skipped}, Errors: {fcf_error}"
         )
+        logger.info(
+            f"API - Calls: {self.api_calls_made}, Cache hits: {self.cache_hits}"
+        )
         logger.info("=" * 60)
 
-    def _get_stocks_to_process(self, symbols=None):
+    def _get_stocks_to_process(self, symbols=None, limit=7, force_all=False):
         """
-        Get list of CuratedStock objects to process.
+        Get list of CuratedStock objects to process with smart selection.
+
+        Priority:
+        1. If --symbols provided: process those specific symbols
+        2. If --force-all: process all active stocks
+        3. Otherwise: smart select `limit` stocks (default 7)
+
+        Smart selection logic:
+        - First priority: stocks with NULL last_calculation_date (never calculated)
+        - Second priority: stocks with oldest last_calculation_date
+        - Combine both lists and take first `limit` stocks
 
         Args:
             symbols: Optional list of specific symbols to process
+            limit: Number of stocks to process (default: 7)
+            force_all: Process all active stocks (default: False)
 
         Returns:
-            QuerySet of CuratedStock objects
+            List of CuratedStock objects (preserves priority order)
         """
+        # Case 1: Specific symbols requested
         if symbols:
-            # Process specific symbols
             stocks = CuratedStock.objects.filter(
                 symbol__in=[s.upper() for s in symbols]
             )
@@ -249,11 +413,138 @@ class Command(BaseCommand):
                         f"Note: {inactive.count()} inactive stock(s) will be processed"
                     )
                 )
-        else:
-            # Process all active stocks
-            stocks = CuratedStock.objects.filter(active=True)
 
-        return stocks.order_by("symbol")
+            return list(stocks.order_by("symbol"))
+
+        # Case 2: Force all active stocks
+        if force_all:
+            stocks = CuratedStock.objects.filter(active=True).order_by("symbol")
+
+            # Show API limit warning if exceeding 25 calls
+            estimated_calls = stocks.count() * 3
+            if estimated_calls > 25:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"\n⚠ WARNING: Processing {stocks.count()} stocks will make "
+                        f"~{estimated_calls} API calls."
+                    )
+                )
+                self.stdout.write(
+                    self.style.WARNING(
+                        "⚠ This exceeds the AlphaVantage free tier limit of 25 calls/day."
+                    )
+                )
+                self.stdout.write(
+                    self.style.WARNING("⚠ You may encounter rate limit errors.")
+                )
+                self.stdout.write("")  # Blank line
+
+            return list(stocks)
+
+        # Case 3: Smart selection with limit
+        # Get stocks never calculated (NULL last_calculation_date)
+        never_calculated = CuratedStock.objects.filter(
+            active=True, last_calculation_date__isnull=True
+        ).order_by("symbol")
+
+        # Get stocks previously calculated, ordered by oldest first
+        previously_calculated = CuratedStock.objects.filter(
+            active=True, last_calculation_date__isnull=False
+        ).order_by("last_calculation_date", "symbol")
+
+        # Combine: prioritize never_calculated, then oldest
+        never_calc_list = list(never_calculated)
+        prev_calc_list = list(previously_calculated)
+
+        # Take up to `limit` stocks total
+        combined = never_calc_list + prev_calc_list
+        selected = combined[:limit]
+
+        return selected
+
+    def _get_calculation_stats(self):
+        """
+        Get statistics about calculation status across all active stocks.
+
+        Returns:
+            Dictionary with calculation statistics
+        """
+        total = CuratedStock.objects.filter(active=True).count()
+        never_calculated = CuratedStock.objects.filter(
+            active=True, last_calculation_date__isnull=True
+        ).count()
+        previously_calculated = total - never_calculated
+
+        # Get oldest calculation date
+        oldest = (
+            CuratedStock.objects.filter(
+                active=True, last_calculation_date__isnull=False
+            )
+            .order_by("last_calculation_date")
+            .first()
+        )
+
+        oldest_date = oldest.last_calculation_date if oldest else None
+        oldest_symbol = oldest.symbol if oldest else None
+
+        return {
+            "total": total,
+            "never_calculated": never_calculated,
+            "previously_calculated": previously_calculated,
+            "oldest_date": oldest_date,
+            "oldest_symbol": oldest_symbol,
+        }
+
+    def _print_pre_execution_summary(self, stocks, force_all=False, limit=7):
+        """
+        Print detailed pre-execution summary.
+
+        Args:
+            stocks: List/QuerySet of stocks to process
+            force_all: Whether --force-all was used
+            limit: The limit value used
+        """
+        stats = self._get_calculation_stats()
+        stocks_to_process = len(stocks)
+        estimated_calls = stocks_to_process * 3
+
+        self.stdout.write("=" * 65)
+        self.stdout.write(self.style.SUCCESS("CALCULATION STATISTICS:"))
+        self.stdout.write(f"  Total active curated stocks: {stats['total']}")
+        self.stdout.write(f"  Never calculated: {stats['never_calculated']}")
+        self.stdout.write(f"  Previously calculated: {stats['previously_calculated']}")
+
+        if stats["oldest_date"]:
+            self.stdout.write(
+                f"  Oldest calculation: {stats['oldest_date'].strftime('%Y-%m-%d')} "
+                f"({stats['oldest_symbol']})"
+            )
+
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS("EXECUTION PLAN:"))
+        self.stdout.write(f"  Stocks to process this run: {stocks_to_process}")
+        self.stdout.write(f"  Estimated API calls: {estimated_calls}", ending="")
+
+        if estimated_calls <= 25:
+            self.stdout.write(self.style.SUCCESS(" (under 25/day limit ✓)"))
+        else:
+            self.stdout.write(self.style.WARNING(" (EXCEEDS 25/day limit ⚠)"))
+
+        # List selected stocks
+        if stocks_to_process > 0 and stocks_to_process <= 20:
+            self.stdout.write("")
+            self.stdout.write("  Selected stocks (in processing order):")
+            for i, stock in enumerate(stocks, start=1):
+                if stock.last_calculation_date:
+                    date_str = stock.last_calculation_date.strftime("%Y-%m-%d")
+                    self.stdout.write(
+                        f"    {i}. {stock.symbol} (last calculated: {date_str})"
+                    )
+                else:
+                    self.stdout.write(f"    {i}. {stock.symbol} (never calculated)")
+
+        self.stdout.write("=" * 65)
+        self.stdout.write("")
 
     def _process_stock(self, stock, force_refresh=False):
         """
@@ -305,9 +596,7 @@ class Command(BaseCommand):
                     f"Falling back to OVERVIEW endpoint."
                 )
                 self.stdout.write(
-                    self.style.WARNING(
-                        f"  ⚠ Falling back to annual EPS from OVERVIEW"
-                    )
+                    self.style.WARNING("  ⚠ Falling back to annual EPS from OVERVIEW")
                 )
 
                 overview_data = self._fetch_eps_data(
@@ -402,6 +691,8 @@ class Command(BaseCommand):
         New implementation uses _fetch_earnings_data() for quarterly EPS TTM.
         Still used to fetch SharesOutstanding for FCF calculations.
 
+        Tracks API calls and cache hits for reporting.
+
         Cache TTL: 7 days (604800 seconds)
         Cache key format: av_overview_{symbol}
 
@@ -418,11 +709,13 @@ class Command(BaseCommand):
         if not force_refresh:
             cached_data = cache.get(cache_key)
             if cached_data:
+                self.cache_hits += 1  # Track cache hit
                 self.stdout.write(self.style.SUCCESS("  Using cached overview data"))
                 logger.debug(f"Overview cache hit for {symbol}")
                 return cached_data
 
         # Fetch from API
+        self.api_calls_made += 1  # Track API call
         self.stdout.write("  Fetching overview from Alpha Vantage API...")
         logger.debug(f"Overview cache miss for {symbol}, fetching from API")
 
@@ -442,6 +735,8 @@ class Command(BaseCommand):
 
         This is used to calculate EPS TTM (sum of 4 most recent quarterly reportedEPS).
 
+        Tracks API calls and cache hits for reporting.
+
         Cache TTL: 7 days (604800 seconds)
         Cache key format: av_earnings_{symbol}
 
@@ -458,11 +753,13 @@ class Command(BaseCommand):
         if not force_refresh:
             cached_data = cache.get(cache_key)
             if cached_data:
+                self.cache_hits += 1  # Track cache hit
                 self.stdout.write(self.style.SUCCESS("  Using cached earnings data"))
                 logger.debug(f"Earnings cache hit for {symbol}")
                 return cached_data
 
         # Fetch from API
+        self.api_calls_made += 1  # Track API call
         self.stdout.write("  Fetching earnings from Alpha Vantage API...")
         logger.debug(f"Earnings cache miss for {symbol}, fetching from API")
 
@@ -480,6 +777,8 @@ class Command(BaseCommand):
         """
         Fetch cash flow data from Alpha Vantage with Redis caching.
 
+        Tracks API calls and cache hits for reporting.
+
         Cache TTL: 7 days (same as OVERVIEW)
         Cache key format: av_cashflow_{symbol}
 
@@ -496,11 +795,13 @@ class Command(BaseCommand):
         if not force_refresh:
             cached_data = cache.get(cache_key)
             if cached_data:
+                self.cache_hits += 1  # Track cache hit
                 self.stdout.write(self.style.SUCCESS("  Using cached cash flow data"))
                 logger.debug(f"Cash flow cache hit for {symbol}")
                 return cached_data
 
         # Fetch from API
+        self.api_calls_made += 1  # Track API call
         self.stdout.write("  Fetching cash flow from Alpha Vantage API...")
         logger.debug(f"Cash flow cache miss for {symbol}, fetching from API")
 

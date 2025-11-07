@@ -130,7 +130,7 @@ Successfully implemented a weekly valuation system that calculates the intrinsic
    - Fetches EPS TTM from Alpha Vantage EARNINGS endpoint (sum of 4 quarterly reportedEPS)
    - Also fetches OVERVIEW and CASH_FLOW endpoints for complete valuation data
    - Redis caching with 7-day TTL
-   - 15-second rate limiting (4 calls/minute) for API call limits
+   - 20-second rate limiting (3 calls/minute) for conservative API usage
    - Command options: `--symbols`, `--force-refresh`, `--clear-cache`
    - Comprehensive error handling and logging
    - Summary statistics output
@@ -156,8 +156,8 @@ python manage.py calculate_intrinsic_value --symbols AAPL MSFT
 # Force refresh cached API data
 python manage.py calculate_intrinsic_value --force-refresh
 
-# Schedule weekly (Monday 8 PM)
-0 20 * * 1 cd /path/to/project && python manage.py calculate_intrinsic_value
+# Schedule daily (8 PM Eastern) - Updated in Phase 4.1
+0 20 * * * cd /path/to/project && python manage.py calculate_intrinsic_value
 ```
 
 **Completed Tasks**:
@@ -193,7 +193,7 @@ The system now supports both EPS-based and FCF-based DCF valuation methods:
 - Fetches EARNINGS (quarterly EPS), OVERVIEW (shares outstanding), and CASH_FLOW (quarterly FCF) from Alpha Vantage
 - **3 API calls per stock**: EARNINGS for EPS TTM, OVERVIEW for shares, CASH_FLOW for FCF TTM
 - Independent success/failure tracking for EPS and FCF methods
-- Rate limiting: 15 seconds (4 calls/minute) for Alpha Vantage API limits
+- Rate limiting: 20 seconds (3 calls/minute) for conservative Alpha Vantage API usage
 - Separate statistics in summary output for each method
 - Cache management with separate keys: `av_earnings_{symbol}`, `av_overview_{symbol}`, `av_cashflow_{symbol}`
 
@@ -217,6 +217,46 @@ python manage.py calculate_intrinsic_value
 - Test database isolation fixes for integration tests (optional)
 
 See task files for detailed implementation notes.
+
+### Phase 4.1: API Rate Limit Optimization for Intrinsic Value Calculations
+
+**Status**: ✅ Completed
+
+**Related Tasks**:
+
+- ✅ `021-add-calculation-date-index.md` - Add database index on last_calculation_date for query performance
+- ✅ `022-smart-stock-selection.md` - Implement smart stock selection logic prioritizing never-calculated and oldest stocks
+- ✅ `023-api-call-tracking.md` - Add API call tracking and enhanced reporting with before/after values
+
+**Summary**:
+Successfully optimized the `calculate_intrinsic_value` management command to respect AlphaVantage's free tier limit of 25 API requests per day. The system makes 3 API calls per stock (EARNINGS, OVERVIEW, CASH_FLOW), and now implements a rolling update strategy that:
+
+- Processes 7 stocks per run (21 API calls, conservative limit) by default
+- Prioritizes stocks that have never been calculated (NULL `last_calculation_date`)
+- Then processes stocks with the oldest `last_calculation_date` (stale valuations)
+- Added `--limit N` flag to override the default 7-stock limit
+- Added `--force-all` flag to process all stocks (with API limit warning)
+- Implements detailed logging with before/after intrinsic values for both EPS and FCF methods
+- Tracks API calls made vs cached responses with cache hit rate reporting
+- Displays remaining stocks needing calculation in summary
+- Designed for daily cron execution for rolling updates instead of weekly batches
+
+**Technical Implementation**:
+- Added database index on `last_calculation_date` (migration 0006) for efficient queries
+- Smart QuerySet selection: prioritize NULL dates, then order by oldest first
+- Instance-level counters for API calls and cache hits in all three fetch methods
+- Enhanced per-stock output showing previous and new values with delta/percentage change
+- Pre-execution summary showing total stocks, never-calculated count, and API call estimates
+- Post-execution summary with API usage stats and remaining work statistics
+- 20-second rate limiting (3 calls/minute) for conservative API usage
+
+**Completed Tasks**:
+- ✅ Task 021: Created database migration adding B-tree index on `last_calculation_date`
+- ✅ Task 022: Implemented smart stock selection with `--limit` and `--force-all` flags, plus detailed pre-execution summary
+- ✅ Task 023: Added comprehensive API call tracking and enhanced reporting with before/after value comparisons
+
+**Expected Outcome**:
+All curated stocks stay up-to-date with intrinsic valuations through daily rolling updates (7 stocks/day = full portfolio refresh every ~7 days for 50 stocks), respecting API rate limits while maintaining calculation freshness across the portfolio. Cache hit rates reduce actual API calls significantly over time.
 
 ### Phase 5: Update Option Scanner to provide a visual representation of intrinsic value
 
