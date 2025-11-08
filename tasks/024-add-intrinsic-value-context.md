@@ -2,11 +2,11 @@
 
 ## Progress Summary
 
-**Status**: Not Started
+**Status**: In Progress
 
-- [ ] Step 1: Add helper method to CuratedStock model
-- [ ] Step 2: Update scan_view to include intrinsic value context
-- [ ] Step 3: Update scan_status polling view with intrinsic value context
+- [x] Step 1: Add helper method to CuratedStock model
+- [x] Step 2: Update scan_view to include intrinsic value context
+- [x] Step 3: Update scan_status polling view with intrinsic value context
 - [ ] Step 4: Test context data flow with various stock states
 
 ## Overview

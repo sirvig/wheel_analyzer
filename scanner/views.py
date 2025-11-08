@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
+from scanner.models import CuratedStock
 from scanner.scanner import perform_scan
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ def get_scan_results():
     Helper function to fetch current scan results from Redis.
 
     Returns:
-        dict: Context with ticker_options, ticker_scan, and last_scan
+        dict: Context with ticker_options, ticker_scan, last_scan, and curated_stocks
     """
     keys = r.keys("put_*")
     ticker_options = {}
@@ -118,10 +119,19 @@ def get_scan_results():
     last_run_data = r.get("last_run")
     last_scan = last_run_data.decode("utf-8") if last_run_data else "Never"
 
+    # Fetch CuratedStock instances for all symbols in results
+    if sorted_ticker_options:
+        symbols = list(sorted_ticker_options.keys())
+        curated_stocks = CuratedStock.objects.filter(symbol__in=symbols, is_active=True)
+        curated_stocks_dict = {stock.symbol: stock for stock in curated_stocks}
+    else:
+        curated_stocks_dict = {}
+
     return {
         "ticker_options": sorted_ticker_options,
         "ticker_scan": ticker_scan,
         "last_scan": last_scan,
+        "curated_stocks": curated_stocks_dict,
     }
 
 

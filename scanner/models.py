@@ -21,7 +21,7 @@ class CuratedStock(models.Model):
         blank=True,
         help_text="Calculated fair value per share based on EPS DCF model",
     )
-    
+
     # FCF Calculation Results (auto-populated by calculation command)
     intrinsic_value_fcf = models.DecimalField(
         max_digits=10,
@@ -37,7 +37,7 @@ class CuratedStock(models.Model):
         blank=True,
         help_text="Trailing twelve months Free Cash Flow per share",
     )
-    
+
     last_calculation_date = models.DateTimeField(
         null=True,
         blank=True,
@@ -64,7 +64,7 @@ class CuratedStock(models.Model):
         default=20.0,
         help_text="Multiple applied to terminal year EPS for terminal value",
     )
-    
+
     # FCF DCF Assumptions (manually editable in admin)
     fcf_growth_rate = models.DecimalField(
         max_digits=5,
@@ -78,7 +78,7 @@ class CuratedStock(models.Model):
         default=20.0,
         help_text="Multiple applied to terminal year FCF for terminal value",
     )
-    
+
     # Shared DCF Assumptions (used by both EPS and FCF methods)
     desired_return = models.DecimalField(
         max_digits=5,
@@ -89,7 +89,7 @@ class CuratedStock(models.Model):
     projection_years = models.IntegerField(
         default=5, help_text="Number of years to project growth"
     )
-    
+
     # Valuation Display Preference
     preferred_valuation_method = models.CharField(
         max_length=3,
@@ -103,6 +103,25 @@ class CuratedStock(models.Model):
 
     def __str__(self):
         return self.symbol
+
+    def get_effective_intrinsic_value(self):
+        """
+        Get the intrinsic value based on the preferred valuation method.
+
+        Returns:
+            Decimal or None: The intrinsic value for the preferred method,
+                             or None if not calculated.
+
+        Example:
+            >>> stock = CuratedStock.objects.get(symbol="AAPL")
+            >>> stock.preferred_valuation_method = "EPS"
+            >>> stock.get_effective_intrinsic_value()
+            Decimal('150.25')
+        """
+        if self.preferred_valuation_method == "FCF":
+            return self.intrinsic_value_fcf
+        else:  # Default to EPS
+            return self.intrinsic_value
 
     class Meta:
         ordering = ["symbol"]
