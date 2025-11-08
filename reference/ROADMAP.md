@@ -260,15 +260,60 @@ All curated stocks stay up-to-date with intrinsic valuations through daily rolli
 
 ### Phase 5: Update Option Scanner to provide a visual representation of intrinsic value
 
-**Status**: Not started
+**Status**: Not Started
 
 **Related Tasks**:
 
-**Summary**:
-The goal here is to present the user with a visual representation that the option strike price is at or below the intrinsic value calculated above.
-When the Scan for options job is run and options are found to be displayed - if the option strike price is at or below the intrinsic value that was last calculated there should be a green light added.  If its above the intrinsic value, a red light should be added.  If any of the options found for a stock are at or below the intrinsic value, a green light should be added to the accordian tab as well.  Otherwise a red light should be added.
+- ⏳ `024-add-intrinsic-value-context.md` - Add intrinsic value context to scanner views
+- ⏳ `025-add-visual-indicators.md` - Update options results template with Bootstrap badges
+- ⏳ `026-valuation-page-backend.md` - Create backend view and URL for valuations page
+- ⏳ `027-valuation-page-frontend.md` - Create frontend template and navbar navigation
+- ⏳ `028-testing-and-refinement.md` - Add comprehensive tests and perform manual testing
 
-Additionally, we need a single page view of the curated list and their valuations.
+**Summary**:
+Add visual indicators to the options scanner showing whether option strike prices are at or below intrinsic value, and create a comprehensive valuations page for the curated stock list.
+
+**Visual Indicators Feature**:
+- Bootstrap badges on each option row showing comparison to intrinsic value
+  - Green "✓ Good": Strike ≤ Intrinsic Value (would buy at/below fair value if assigned)
+  - Red "✗ High": Strike > Intrinsic Value (would buy above fair value if assigned)
+  - Yellow "⚠ N/A": Intrinsic Value not calculated (NULL)
+- Badge on accordion header showing overall stock status
+  - Green ✓: At least one option has strike ≤ IV
+  - Red ✗: All options have strike > IV
+  - Yellow ⚠: No intrinsic value calculated
+- Uses `preferred_valuation_method` to choose between EPS and FCF intrinsic values
+- Template tags for dictionary access and good option detection
+
+**Valuations Page Feature**:
+- New page at `/scanner/valuations/` displaying all active curated stocks
+- Simple table with columns:
+  - Ticker and Company Name
+  - Intrinsic Value (EPS) and Intrinsic Value (FCF)
+  - Preferred Valuation Method (badge indicator)
+  - Last Calculation Date
+  - Key Assumptions (growth rates, multiples, desired return)
+- Graceful handling of NULL intrinsic values (shows "-" or "Never")
+- Authentication required (@login_required)
+- Stocks ordered alphabetically by ticker
+- Accessible via navbar dropdown menu ("Scanner" → "Stock Valuations")
+
+**Technical Implementation**:
+- `CuratedStock.get_effective_intrinsic_value()` model method returns IV based on preferred method
+- Scanner views (`scan_view`, `scan_status`) include `curated_stocks` dictionary in context
+- Custom template filter `dict_get` for dictionary access in Django templates
+- Custom template tag `check_good_options` to determine accordion header badge color
+- `valuation_list_view` Django view with queryset filtering and ordering
+- Bootstrap 5 badges and table components for styling
+- Responsive design with `table-responsive` wrapper for mobile
+
+**Testing**:
+- Unit tests for `get_effective_intrinsic_value()` method (6 tests)
+- Integration tests for `valuation_list_view` (7 tests)
+- Integration tests for scanner view context (4 tests)
+- Manual testing checklist covering all scenarios
+- Browser compatibility testing (Chrome, Firefox, Safari)
+- Responsive design verification (desktop, tablet, mobile)
 
 ### Phase 6: Create historical storage of valuation calculations
 
