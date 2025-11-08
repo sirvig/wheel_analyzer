@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto mt-4">
+  {# Page header #}
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Stock Valuations</h1>
+    <p class="text-gray-600 dark:text-gray-400 mt-2">
+      Intrinsic value calculations for {{ stocks.count }} active curated stock{{ stocks.count|pluralize }}
+    </p>
+  </div>
+  
+  {# Valuation table #}
+  {% if stocks %}
+    <div class="relative overflow-x-auto shadow-md sm:rounded-lg">
+      <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+          <tr>
+            <th scope="col" class="px-6 py-3">Ticker</th>
+            <th scope="col" class="px-6 py-3">Company</th>
+            <th scope="col" class="px-6 py-3">IV (EPS)</th>
+            <th scope="col" class="px-6 py-3">IV (FCF)</th>
+            <th scope="col" class="px-6 py-3">Preferred</th>
+            <th scope="col" class="px-6 py-3">Last Calc</th>
+            <th scope="col" class="px-6 py-3">Assumptions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for stock in stocks %}
+            <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+              {# Ticker #}
+              <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                {{ stock.symbol }}
+              </td>
+              
+              {# Company name #}
+              <td class="px-6 py-4">{{ stock.name }}</td>
+              
+              {# EPS intrinsic value #}
+              <td class="px-6 py-4">
+                {% if stock.intrinsic_value %}
+                  ${{ stock.intrinsic_value|floatformat:2 }}
+                {% else %}
+                  <span class="text-gray-400">-</span>
+                {% endif %}
+              </td>
+              
+              {# FCF intrinsic value #}
+              <td class="px-6 py-4">
+                {% if stock.intrinsic_value_fcf %}
+                  ${{ stock.intrinsic_value_fcf|floatformat:2 }}
+                {% else %}
+                  <span class="text-gray-400">-</span>
+                {% endif %}
+              </td>
+              
+              {# Preferred method #}
+              <td class="px-6 py-4">
+                {% if stock.preferred_valuation_method == 'EPS' %}
+                  <span class="inline-flex items-center px-2 py-1 text-xs font-semibold text-blue-800 bg-blue-200 rounded-full">EPS</span>
+                {% elif stock.preferred_valuation_method == 'FCF' %}
+                  <span class="inline-flex items-center px-2 py-1 text-xs font-semibold text-cyan-800 bg-cyan-200 rounded-full">FCF</span>
+                {% else %}
+                  <span class="text-gray-400">-</span>
+                {% endif %}
+              </td>
+              
+              {# Last calculation date #}
+              <td class="px-6 py-4">
+                {% if stock.last_calculation_date %}
+                  <div>{{ stock.last_calculation_date|date:"M d, Y" }}</div>
+                  <div class="text-xs text-gray-400">{{ stock.last_calculation_date|date:"g:i A" }}</div>
+                {% else %}
+                  <span class="text-gray-400">Never</span>
+                {% endif %}
+              </td>
+              
+              {# Assumptions #}
+              <td class="px-6 py-4 text-xs">
+                {% if stock.preferred_valuation_method == 'EPS' %}
+                  <div>Growth: {{ stock.eps_growth_rate|floatformat:0 }}%</div>
+                  <div>Multiple: {{ stock.eps_multiple|floatformat:0 }}</div>
+                {% elif stock.preferred_valuation_method == 'FCF' %}
+                  <div>Growth: {{ stock.fcf_growth_rate|floatformat:0 }}%</div>
+                  <div>Multiple: {{ stock.fcf_multiple|floatformat:0 }}</div>
+                {% else %}
+                  <span class="text-gray-400">-</span>
+                {% endif %}
+                <div>Return: {{ stock.desired_return|floatformat:0 }}%</div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {# No stocks found #}
+    <div class="p-4 mb-4 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-gray-800 dark:text-blue-400" role="alert">
+      <h4 class="font-bold mb-2">No Active Stocks</h4>
+      <p>No active curated stocks found. Add stocks via the Django admin interface.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

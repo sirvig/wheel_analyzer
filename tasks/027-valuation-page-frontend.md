@@ -2,12 +2,12 @@
 
 ## Progress Summary
 
-**Status**: Not Started
+**Status**: Completed
 
-- [ ] Step 1: Create valuations.html template with table structure
-- [ ] Step 2: Add navigation dropdown to navbar
-- [ ] Step 3: Test page layout and responsive design
-- [ ] Step 4: Verify NULL value handling
+- [x] Step 1: Create valuations.html template with table structure
+- [x] Step 2: Add navigation dropdown to navbar (using Flowbite dropdown components)
+- [ ] Step 3: Test page layout and responsive design (to be tested manually)
+- [ ] Step 4: Verify NULL value handling (to be tested manually)
 
 ## Overview
 
