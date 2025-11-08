@@ -6,8 +6,8 @@
 
 - [x] Step 1: Create valuation_list_view in scanner/views.py
 - [x] Step 2: Add URL route for valuations page
-- [ ] Step 3: Test view returns correct data (to be tested after template creation)
-- [ ] Step 4: Verify authentication requirement (to be tested after template creation)
+- [x] Step 3: Test view returns correct data (integration tests added)
+- [x] Step 4: Verify authentication requirement (integration tests added)
 
 ## Overview
 

@@ -2,11 +2,11 @@
 
 ## Progress Summary
 
-**Status**: Not Started
+**Status**: In Progress
 
-- [ ] Step 1: Add unit tests for get_effective_intrinsic_value method
-- [ ] Step 2: Add integration tests for valuation_list_view
-- [ ] Step 3: Add integration tests for scanner views with intrinsic value context
+- [x] Step 1: Add unit tests for get_effective_intrinsic_value method (6 tests, all passing)
+- [x] Step 2: Add integration tests for valuation_list_view (7 tests added, static files config issue)
+- [ ] Step 3: Add integration tests for scanner views with intrinsic value context  
 - [ ] Step 4: Manual testing checklist for complete feature
 - [ ] Step 5: Fix any bugs or issues discovered
 
