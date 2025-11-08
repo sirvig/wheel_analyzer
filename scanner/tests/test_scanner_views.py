@@ -267,3 +267,133 @@ class TestOptionsListView:
             assert "options" in response.context
             assert len(response.context["options"]) == 1
             assert response.context["options"][0]["strike"] == 180.0
+
+
+# Valuation List View Tests
+class TestValuationListView:
+    """Tests for the valuation list view."""
+
+    @pytest.mark.django_db
+    def test_valuation_list_requires_authentication(self, client):
+        """Valuation list view requires user to be logged in."""
+        response = client.get("/scanner/valuations/")
+
+        # Should redirect to login
+        assert response.status_code == 302
+        assert "/accounts/login/" in response.url
+
+    @pytest.mark.django_db
+    def test_valuation_list_authenticated(self, client, user):
+        """Authenticated user can access valuation list."""
+        client.force_login(user)
+
+        response = client.get("/scanner/valuations/")
+
+        # Should succeed
+        assert response.status_code == 200
+        assert "scanner/valuations.html" in [t.name for t in response.templates]
+
+    @pytest.mark.django_db
+    def test_valuation_list_shows_active_stocks_only(self, client, user):
+        """Valuation list shows only active curated stocks."""
+        from scanner.factories import CuratedStockFactory
+
+        # Create active and inactive stocks
+        active1 = CuratedStockFactory(symbol="ATEST1", active=True)
+        active2 = CuratedStockFactory(symbol="ATEST2", active=True)
+        inactive = CuratedStockFactory(symbol="ITEST", active=False)
+
+        client.force_login(user)
+        response = client.get("/scanner/valuations/")
+
+        stocks = response.context["stocks"]
+
+        # Should include active stocks
+        assert active1 in stocks
+        assert active2 in stocks
+
+        # Should NOT include inactive stock
+        assert inactive not in stocks
+
+    @pytest.mark.django_db
+    def test_valuation_list_ordered_by_symbol(self, client, user):
+        """Valuation list is ordered alphabetically by symbol."""
+        from scanner.factories import CuratedStockFactory
+
+        # Create stocks in non-alphabetical order
+        CuratedStockFactory(symbol="ZTEST", active=True)
+        CuratedStockFactory(symbol="BTEST", active=True)
+        CuratedStockFactory(symbol="MTEST", active=True)
+
+        client.force_login(user)
+        response = client.get("/scanner/valuations/")
+
+        stocks = response.context["stocks"]
+        symbols = [stock.symbol for stock in stocks]
+
+        # Should be in alphabetical order
+        assert symbols == sorted(symbols)
+
+    @pytest.mark.django_db
+    def test_valuation_list_context_includes_stocks(self, client, user):
+        """Valuation list context includes stocks queryset."""
+        from scanner.factories import CuratedStockFactory
+
+        stock = CuratedStockFactory(symbol="CTEST", active=True)
+
+        client.force_login(user)
+        response = client.get("/scanner/valuations/")
+
+        # Should have stocks in context
+        assert "stocks" in response.context
+
+        stocks = response.context["stocks"]
+        assert stocks.count() > 0
+        assert stock in stocks
+
+    @pytest.mark.django_db
+    def test_valuation_list_handles_no_stocks(self, client, user):
+        """Valuation list handles case with no active stocks."""
+        from scanner.models import CuratedStock
+
+        # Deactivate all stocks
+        CuratedStock.objects.update(active=False)
+
+        client.force_login(user)
+        response = client.get("/scanner/valuations/")
+
+        # Should still succeed with empty queryset
+        assert response.status_code == 200
+        assert response.context["stocks"].count() == 0
+
+    @pytest.mark.django_db
+    def test_valuation_list_displays_intrinsic_values(self, client, user):
+        """Valuation list can display stocks with NULL intrinsic values."""
+        from decimal import Decimal
+        from scanner.factories import CuratedStockFactory
+
+        # Stock with values
+        stock_with_values = CuratedStockFactory(
+            symbol="VTEST1",
+            intrinsic_value=Decimal("150.00"),
+            intrinsic_value_fcf=Decimal("148.00"),
+            active=True,
+        )
+
+        # Stock with NULL values
+        stock_without_values = CuratedStockFactory(
+            symbol="VTEST2",
+            intrinsic_value=None,
+            intrinsic_value_fcf=None,
+            active=True,
+        )
+
+        client.force_login(user)
+        response = client.get("/scanner/valuations/")
+
+        # Should succeed without errors
+        assert response.status_code == 200
+
+        stocks = response.context["stocks"]
+        assert stock_with_values in stocks
+        assert stock_without_values in stocks

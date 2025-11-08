@@ -3,6 +3,13 @@ from django.core.cache import cache
 
 from scanner.factories import OptionsWatchFactory
 from scanner.models import CuratedStock
+from tracker.factories import UserFactory
+
+
+@pytest.fixture
+def user():
+    """Create a test user."""
+    return UserFactory()
 
 
 @pytest.fixture

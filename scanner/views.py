@@ -122,7 +122,7 @@ def get_scan_results():
     # Fetch CuratedStock instances for all symbols in results
     if sorted_ticker_options:
         symbols = list(sorted_ticker_options.keys())
-        curated_stocks = CuratedStock.objects.filter(symbol__in=symbols, is_active=True)
+        curated_stocks = CuratedStock.objects.filter(symbol__in=symbols, active=True)
         curated_stocks_dict = {stock.symbol: stock for stock in curated_stocks}
     else:
         curated_stocks_dict = {}
@@ -220,7 +220,7 @@ def valuation_list_view(request):
         Template receives list of stocks with all valuation fields
     """
     # Query all active curated stocks, ordered alphabetically
-    stocks = CuratedStock.objects.filter(is_active=True).order_by("symbol")
+    stocks = CuratedStock.objects.filter(active=True).order_by("symbol")
 
     logger.info(f"Valuation list view accessed by {request.user.username}")
     logger.debug(f"Displaying {stocks.count()} active curated stocks")
