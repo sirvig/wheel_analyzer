@@ -196,3 +196,37 @@ def scan_status(request):
         logger.debug("Scan status check: scan complete")
         # Return final results partial to stop polling
         return render(request, "scanner/partials/options_results.html", context)
+
+
+@login_required
+def valuation_list_view(request):
+    """
+    Display all active curated stocks with their valuation data.
+
+    Shows intrinsic values (EPS and FCF methods), calculation assumptions,
+    and last calculation dates for all active stocks in the curated list.
+
+    This page provides a comprehensive overview of the portfolio's intrinsic
+    value calculations, allowing users to review valuation metrics across
+    all monitored stocks.
+
+    Template: scanner/valuations.html
+
+    Context:
+        stocks (QuerySet): All active CuratedStock instances ordered by symbol
+
+    Example:
+        Access via: /scanner/valuations/
+        Template receives list of stocks with all valuation fields
+    """
+    # Query all active curated stocks, ordered alphabetically
+    stocks = CuratedStock.objects.filter(is_active=True).order_by("symbol")
+
+    logger.info(f"Valuation list view accessed by {request.user.username}")
+    logger.debug(f"Displaying {stocks.count()} active curated stocks")
+
+    context = {
+        "stocks": stocks,
+    }
+
+    return render(request, "scanner/valuations.html", context)
