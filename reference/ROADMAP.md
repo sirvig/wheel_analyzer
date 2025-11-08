@@ -260,18 +260,66 @@ All curated stocks stay up-to-date with intrinsic valuations through daily rolli
 
 ### Phase 5: Update Option Scanner to provide a visual representation of intrinsic value
 
-**Status**: Not Started
+**Status**: ✅ Completed
 
 **Related Tasks**:
 
-- ⏳ `024-add-intrinsic-value-context.md` - Add intrinsic value context to scanner views
-- ⏳ `025-add-visual-indicators.md` - Update options results template with Bootstrap badges
-- ⏳ `026-valuation-page-backend.md` - Create backend view and URL for valuations page
-- ⏳ `027-valuation-page-frontend.md` - Create frontend template and navbar navigation
-- ⏳ `028-testing-and-refinement.md` - Add comprehensive tests and perform manual testing
+- ✅ `024-add-intrinsic-value-context.md` - Add intrinsic value context to scanner views
+- ✅ `025-add-visual-indicators.md` - Update options results template with Tailwind CSS badges
+- ✅ `026-valuation-page-backend.md` - Create backend view and URL for valuations page
+- ✅ `027-valuation-page-frontend.md` - Create frontend template and navbar navigation
+- ⏳ `028-testing-and-refinement.md` - Add comprehensive tests and perform manual testing (tests pending)
 
 **Summary**:
-Add visual indicators to the options scanner showing whether option strike prices are at or below intrinsic value, and create a comprehensive valuations page for the curated stock list.
+Successfully added visual indicators to the options scanner showing whether option strike prices are at or below intrinsic value, and created a comprehensive valuations page for the curated stock list.
+
+**Visual Indicators Feature**:
+- Tailwind CSS badges on each option row showing comparison to intrinsic value
+  - Green "✓ Good": Strike ≤ Intrinsic Value (would buy at/below fair value if assigned)
+  - Red "✗ High": Strike > Intrinsic Value (would buy above fair value if assigned)
+  - Yellow "⚠ N/A": Intrinsic Value not calculated (NULL)
+- Badge on accordion header showing overall stock status
+  - Green ✓: At least one option has strike ≤ IV
+  - Red ✗: All options have strike > IV
+  - Yellow ⚠: No intrinsic value calculated
+- Uses `preferred_valuation_method` to choose between EPS and FCF intrinsic values
+- Template filters and tags: `dict_get` for dictionary access, `check_good_options` for status detection
+
+**Valuations Page Feature**:
+- New page at `/scanner/valuations/` displaying all active curated stocks
+- Responsive Tailwind CSS table with columns:
+  - Ticker and Company Name
+  - Intrinsic Value (EPS) and Intrinsic Value (FCF)
+  - Preferred Valuation Method (badge indicator)
+  - Last Calculation Date
+  - Key Assumptions (growth rates, multiples, desired return)
+- Graceful handling of NULL intrinsic values (shows "-" or "Never")
+- Authentication required (@login_required)
+- Stocks ordered alphabetically by ticker
+- Accessible via navbar dropdown menu ("Scanner" → "Stock Valuations")
+
+**Technical Implementation**:
+- `CuratedStock.get_effective_intrinsic_value()` model method returns IV based on preferred method
+- Scanner views (`scan_view`, `scan_status`) include `curated_stocks` dictionary in context
+- Custom template filter `dict_get` for dictionary access in Django templates
+- Custom template tag `check_good_options` to determine accordion header badge color
+- `valuation_list_view` Django view with queryset filtering and ordering
+- Tailwind CSS with Flowbite components for styling
+- Responsive design with proper mobile support
+
+**Completed Tasks**:
+- ✅ Task 024: Added `get_effective_intrinsic_value()` method and updated scanner views context
+- ✅ Task 025: Converted options display from list to table format with status badges
+- ✅ Task 026: Created backend view and URL routing for valuations page
+- ✅ Task 027: Created frontend template with Tailwind table and navbar dropdown menu
+
+**Remaining Work**:
+- Unit tests for `get_effective_intrinsic_value()` method
+- Integration tests for `valuation_list_view`
+- Integration tests for scanner view context
+- Manual testing of visual indicators and responsive design
+
+See task files for detailed implementation notes.
 
 **Visual Indicators Feature**:
 - Bootstrap badges on each option row showing comparison to intrinsic value
