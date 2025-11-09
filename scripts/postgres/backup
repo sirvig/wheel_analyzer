@@ -2,7 +2,7 @@
 
 # Load the .env file
 set -a
-source .env
+. /app/.env
 set +a
 
 echo "Backup process started."

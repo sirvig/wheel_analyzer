@@ -18,6 +18,9 @@ SECRET_KEY = env("SECRET_KEY", default="unsafe-secret-key")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG", default=False)
 
+# Environment configuration (LOCAL, TESTING, PRODUCTION)
+ENVIRONMENT = env("ENVIRONMENT", default="PRODUCTION")
+
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", default="*,").split(",")
 CSRF_TRUSTED_ORIGINS = [
     f"https://{host}" if not host.startswith(("http://", "https://")) else host

@@ -38,18 +38,22 @@
               <td class="px-6 py-4">{{ stock.name }}</td>
               
               {# EPS intrinsic value #}
-              <td class="px-6 py-4">
+              <td class="px-6 py-4 {% if stock.preferred_valuation_method == 'EPS' %}bg-blue-50 dark:bg-blue-900/20{% endif %}">
                 {% if stock.intrinsic_value %}
-                  ${{ stock.intrinsic_value|floatformat:2 }}
+                  <span class="{% if stock.preferred_valuation_method == 'EPS' %}font-semibold text-gray-900 dark:text-white{% else %}text-gray-400{% endif %}">
+                    ${{ stock.intrinsic_value|floatformat:2 }}
+                  </span>
                 {% else %}
                   <span class="text-gray-400">-</span>
                 {% endif %}
               </td>
               
               {# FCF intrinsic value #}
-              <td class="px-6 py-4">
+              <td class="px-6 py-4 {% if stock.preferred_valuation_method == 'FCF' %}bg-cyan-50 dark:bg-cyan-900/20{% endif %}">
                 {% if stock.intrinsic_value_fcf %}
-                  ${{ stock.intrinsic_value_fcf|floatformat:2 }}
+                  <span class="{% if stock.preferred_valuation_method == 'FCF' %}font-semibold text-gray-900 dark:text-white{% else %}text-gray-400{% endif %}">
+                    ${{ stock.intrinsic_value_fcf|floatformat:2 }}
+                  </span>
                 {% else %}
                   <span class="text-gray-400">-</span>
                 {% endif %}

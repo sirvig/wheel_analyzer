@@ -1,8 +1,23 @@
 {% load options_extras %}
 
+<!-- Development Mode Warning Banner -->
+{% if is_local_environment %}
+<div class="p-4 mb-4 text-sm text-amber-800 rounded-lg bg-amber-50 dark:bg-gray-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800" role="alert">
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 inline w-4 h-4 me-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/>
+        </svg>
+        <span class="font-semibold me-2">Development Mode:</span>
+        Options data may be stale. Scans ran outside regular market hours (9:30 AM - 4:00 PM ET).
+    </div>
+</div>
+{% endif %}
+
 <div class="mb-4">
     Last scan: {{ last_scan }}<br />
+    {% if not is_local_environment %}
     NOTE: Scans only happen between 9:30-4:00 EST on trading days.<br />
+    {% endif %}
 </div>
 
 {% if ticker_options %}

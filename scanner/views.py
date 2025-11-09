@@ -5,6 +5,7 @@ import threading
 from datetime import datetime
 
 import redis
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.views.decorators.http import require_POST
@@ -65,7 +66,11 @@ def run_scan_in_background():
     """
     try:
         logger.info("Background scan thread started")
-        result = perform_scan(debug=False)
+        # Allow scans outside market hours in LOCAL environment
+        debug_mode = settings.ENVIRONMENT == "LOCAL"
+        if debug_mode:
+            logger.info("Running in LOCAL environment - bypassing market hours check")
+        result = perform_scan(debug=debug_mode)
 
         if result["success"]:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -132,6 +137,7 @@ def get_scan_results():
         "ticker_scan": ticker_scan,
         "last_scan": last_scan,
         "curated_stocks": curated_stocks_dict,
+        "is_local_environment": settings.ENVIRONMENT == "LOCAL",
     }
 
 

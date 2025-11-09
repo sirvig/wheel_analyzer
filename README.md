@@ -1,230 +1,210 @@
 # Wheel Analyzer
 
-A Django-based web application for tracking and analyzing stock options trading, specifically focused on the "wheel strategy" (selling puts, taking assignment, selling calls). The application helps track options campaigns, individual transactions, and scan for new trading opportunities.
+A Django-based web application for tracking and analyzing stock options trading using the "wheel strategy" (selling puts, taking assignment, selling calls).
 
-## Project Status
+## Features
 
-**Current Phase**: Phase 5 - Visual Intrinsic Value Indicators (Planning Complete)
+### 📊 Options Scanner
+- **Manual Scan Trigger**: Click to scan for options opportunities in real-time
+- **Progressive Results**: Watch results appear as each stock is scanned
+- **Market Hours Awareness**: Automatically restricts scans to trading hours (9:30 AM - 4:00 PM ET)
+- **Development Mode**: Local environment bypass for testing outside market hours
+- **Visual Indicators**: Color-coded badges showing strike price vs. intrinsic value comparison
 
-### Completed Features
-- ✅ **Phase 1**: Database-driven curated stock list with admin interface
-- ✅ **Phase 2**: Manual options scan trigger with HTMX integration
-- ✅ **Phase 3**: Real-time scan progress polling with progressive results
-- ✅ **Phase 4**: DCF intrinsic value calculations (EPS and FCF methods)
-- ✅ **Phase 4.1**: API rate limit optimization with smart stock selection
+### 💰 Valuation System
+- **Dual DCF Models**: Calculate intrinsic value using both EPS and FCF methods
+- **Smart Stock Selection**: Prioritize never-calculated and oldest stocks to respect API limits
+- **Preferred Method**: Choose between EPS or FCF valuation per stock
+- **Visual Highlighting**: At-a-glance identification of preferred valuation method
+- **Daily Rolling Updates**: Automated calculations with 7-stock daily limit
 
-### In Progress
-- ⏳ **Phase 5**: Visual intrinsic value indicators and valuations page
-  - Planning complete (5 task files created)
-  - Implementation not yet started
-  - Next: Begin Task 024 (Add Intrinsic Value Context)
-
-### Key Capabilities
-- **Options Scanner**: Find options with 30%+ annualized returns and delta < 0.20
-- **Intrinsic Value Calculation**: Dual DCF models (EPS-based and FCF-based)
-- **Campaign Tracking**: Track complete wheel strategy campaigns per stock
-- **Transaction Management**: Record puts, calls, rolls, assignments, and dividends
-- **Smart API Usage**: Respects AlphaVantage rate limits with rolling updates
+### 📈 Campaign Tracking
+- **Transaction History**: Track puts, calls, rolls, assignments, and dividends
+- **Account Management**: Organize campaigns by account
+- **Performance Metrics**: Monitor returns and outcomes per campaign
 
 ## Technology Stack
 
 - **Backend**: Django 5.1+, Python 3.13+
 - **Database**: PostgreSQL 14.1
-- **Cache/Queue**: Redis 6.2
-- **Frontend**: HTMX, vanilla JavaScript, Bootstrap 5
-- **Package Management**: uv (fast Python package installer)
-- **Task Runner**: just (Makefile alternative in Rust)
-- **Deployment**: Docker with docker-compose
-- **Linting/Formatting**: ruff
-- **Testing**: pytest-django
+- **Cache**: Redis 6.2
+- **Frontend**: HTMX, Tailwind CSS, Flowbite
+- **Package Manager**: uv
+- **Task Runner**: just
+- **Deployment**: Docker
 
-## Local Development
+## Quick Start
 
-The local development environment runs in a Docker container with source mounted directly. The Django development server will reload on any change.
+### Prerequisites
+- Python 3.13+
+- PostgreSQL 14.1+
+- Redis 6.2+
+- Docker (optional, for containerized services)
 
-### First Time Setup
+### Installation
 
-1. Copy environment file:
-   ```shell
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd wheel-analyzer
+   ```
+
+2. **Copy environment file**
+   ```bash
    cp .env.example .env
+   # Edit .env with your API keys and configuration
    ```
 
-2. Create Docker network:
-   ```shell
-   docker network create app_main
+3. **Start services** (PostgreSQL and Redis)
+   ```bash
+   just up
    ```
 
-3. Build and start services:
-   ```shell
-   docker-compose up -d --build
-   ```
-
-4. Run migrations:
-   ```shell
+4. **Run migrations**
+   ```bash
    just exec python manage.py migrate
    ```
 
-5. Create superuser:
-   ```shell
+5. **Create superuser**
+   ```bash
    just exec python manage.py createsuperuser
    ```
 
-### Development Commands
+6. **Start development server**
+   ```bash
+   just run
+   ```
 
-This project uses [Just](https://github.com/casey/just) as the task runner.
+Visit `http://localhost:8000` to access the application.
 
-List all available commands:
-```shell
-just --list
+## Environment Configuration
+
+The application uses an `ENVIRONMENT` variable to control behavior:
+
+- **`LOCAL`**: Development environment
+  - Allows options scanning outside market hours
+  - Shows development mode warnings
+  - Ideal for testing and debugging
+
+- **`TESTING`**: Test environment
+  - Automatically set by pytest
+  - Uses test database
+
+- **`PRODUCTION`**: Production environment (default)
+  - Enforces market hours restrictions
+  - Production-ready configuration
+
+Set in your `.env` file:
+```bash
+ENVIRONMENT=LOCAL  # or TESTING, PRODUCTION
 ```
 
-#### Essential Commands
+## Key Commands
 
-- `just test` - Run pytest test suite
-- `just lint` - Format and check code with ruff
-- `just run` - Start Django development server (local, not Docker)
-- `just up` - Start Docker services (PostgreSQL and Redis)
+### Development
+- `just test` - Run test suite
+- `just lint` - Format and check code
+- `just run` - Start Django dev server
+- `just up` - Start Docker services
 - `just kill` - Stop Docker services
 
-#### Django Management
+### Management Commands
+- `python manage.py calculate_intrinsic_value` - Calculate DCF valuations
+- `python manage.py cron_scanner` - Scheduled options scan
+- `python manage.py cron_sma` - Calculate moving averages
 
-- `just exec python manage.py makemigrations` - Generate migrations
-- `just exec python manage.py migrate` - Apply migrations
-- `just exec python manage.py shell` - Django shell
+See `AGENTS.md` for complete command reference.
 
-#### Custom Management Commands
+## Project Structure
 
-- `just scan` - Run options scanner (cron_scanner)
-- `just sma` - Calculate simple moving averages
-- `python manage.py calculate_intrinsic_value` - Calculate DCF intrinsic values
-
-### Linters
-
-Format code with ruff:
-```shell
-just lint
+```
+wheel-analyzer/
+├── scanner/              # Options scanning and valuation
+│   ├── marketdata/       # Market data API integration
+│   ├── alphavantage/     # Alpha Vantage API integration
+│   ├── valuation.py      # DCF calculation engine
+│   └── models.py         # CuratedStock, OptionsWatch models
+├── tracker/              # Campaign and transaction tracking
+│   └── models.py         # User, Account, Campaign, Transaction
+├── templates/            # Django templates
+├── static/               # CSS, JS, images
+├── tasks/                # Development task files
+└── reference/            # Documentation (ROADMAP, BUGS, REFACTORS)
 ```
 
-### Migrations
+## API Integrations
 
-Create migrations:
-```shell
-just exec python manage.py makemigrations
-```
+### Market Data API
+- Real-time options chains
+- Strike prices, deltas, implied volatility
+- Used for options scanning
 
-Apply migrations:
-```shell
-just exec python manage.py migrate
-```
-
-Downgrade migrations:
-```shell
-just exec python manage.py showmigrations
-just exec python manage.py migrate <app> <migration_number>
-```
-
-### Tests
-
-All tests are integration tests requiring database connection.
-
-Run tests:
-```shell
-just test
-```
-
-Run specific test file:
-```shell
-just test scanner/tests/test_scanner_views.py
-```
-
-Auto-run tests on file changes:
-```shell
-just test-watch
-```
-
-### Database Backup and Restore
-
-Using `pg_dump` and `pg_restore`:
-
-Backup:
-```shell
-just backup
-# Creates: /backups/backup-YYYY-MM-DD-HHMMSS.dump.gz
-```
-
-Copy backup to local machine:
-```shell
-just mount-docker-backup  # Get all backups
-just mount-docker-backup backup-YYYY-MM-DD-HHMMSS.dump.gz  # Get specific backup
-```
-
-Restore:
-```shell
-just restore backup-YYYY-MM-DD-HHMMSS.dump.gz
-```
-
-## Project Architecture
-
-### Django Apps
-
-**tracker**: Options trading campaign and transaction tracking
-- Models: `User`, `Account`, `Campaign`, `Transaction`
-- Tracks complete trading history per campaign
-
-**scanner**: Options scanning and intrinsic value analysis
-- Models: `CuratedStock`, `OptionsWatch`
-- External integrations: Market data API, Alpha Vantage API
-- DCF valuation calculations (EPS and FCF methods)
-
-### Key Features
-
-**Options Scanner**:
-- Scans curated stock list for attractive options
-- Filters: 30%+ annualized return, delta < 0.20
-- Real-time progress updates via HTMX polling
-- Redis caching for performance
-
-**Intrinsic Value Calculator**:
-- Dual DCF models: EPS-based and FCF-based
-- Fetches fundamental data from Alpha Vantage
-- Smart stock selection respecting API rate limits
-- 7-day Redis caching
-- Daily rolling updates (7 stocks/day)
-
-**Campaign Tracker**:
-- Track complete wheel strategy campaigns
-- Support for puts, calls, rolls, assignments, dividends
-- Per-account and per-stock organization
-
-## Documentation
-
-- **AGENTS.md**: AI assistant context and development guidelines
-- **reference/ROADMAP.md**: Project roadmap and phase tracking
-- **tasks/**: Numbered task files with implementation details
-- **Session Summaries**: Daily session summaries in root directory
+### Alpha Vantage API
+- Quarterly earnings (EPS TTM)
+- Cash flow statements (FCF TTM)
+- Company fundamentals
+- 7-day Redis caching to minimize API calls
 
 ## Development Workflow
 
-See `AGENTS.md` for detailed development workflow, including:
-- Task-based development process
-- Testing requirements
-- Code conventions
-- Migration workflow
+1. **Review Roadmap**: Check `reference/ROADMAP.md` for current phase
+2. **Create Task**: Add numbered task file in `/tasks` directory
+3. **Implement**: Follow task specifications
+4. **Test**: Run `just test` to verify changes
+5. **Document**: Update ROADMAP.md and reference files
 
-## Next Steps
+See `AGENTS.md` for detailed development guidelines.
 
-1. Implement Task 024: Add intrinsic value context to scanner views
-2. Implement Task 025: Add visual indicators (Bootstrap badges) to options results
-3. Implement Task 026: Create valuations page backend
-4. Implement Task 027: Create valuations page frontend
-5. Implement Task 028: Testing and refinement
+## Current Status
 
-See `reference/ROADMAP.md` and individual task files in `/tasks` for detailed specifications.
+**Latest Milestone**: Phase 5 - Visual Indicators (Completed ✅)
+- Options scanner shows strike price vs. intrinsic value comparison
+- Valuations page with highlighted preferred method
+- Comprehensive testing and dark mode support
 
-## License
+**Recent Updates** (Nov 9, 2025):
+- ✅ Fixed scanner URL routing issue
+- ✅ Added preferred valuation highlighting in UI
+- ✅ Implemented LOCAL environment market hours bypass for development
 
-[Your license here]
+**Next Phase**: Phase 6 - Stock Price Integration
+- Pull current prices from market data API
+- Display undervalued stocks widget
+- Enhance valuations page with price comparison
+
+## Testing
+
+```bash
+# Run all tests
+just test
+
+# Run specific test file
+just test scanner/tests/test_scanner_views.py
+
+# Run with coverage
+uv run pytest --cov
+```
+
+Total test coverage: 96 tests (56 unit + 40 integration)
 
 ## Contributing
 
-[Your contributing guidelines here]
+1. Review `AGENTS.md` for coding standards
+2. Follow task-based development workflow
+3. Maintain test coverage for new features
+4. Update documentation (ROADMAP, task files)
+
+## License
+
+[Your License Here]
+
+## Support
+
+For issues, feature requests, or questions:
+- Review `reference/ROADMAP.md` for planned features
+- Check `reference/BUGS.md` for known issues
+- See `AGENTS.md` for development context
+
+---
+
+**Built with Django + HTMX + Tailwind CSS**

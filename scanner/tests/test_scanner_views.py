@@ -233,6 +233,62 @@ class TestScanView:
         # Verify lock was still released in finally block
         mock_redis.delete.assert_called_once_with("scan_in_progress")
 
+    @patch("scanner.views.settings")
+    @patch("scanner.views.perform_scan")
+    @patch("scanner.views.r")
+    def test_scan_view_bypasses_market_hours_in_local_environment(
+        self, mock_redis, mock_perform_scan, mock_settings, client
+    ):
+        """Test that scan view bypasses market hours check in LOCAL environment."""
+        # Mock Redis lock (no existing lock)
+        mock_redis.exists.return_value = False
+        mock_redis.keys.return_value = []
+
+        # Set ENVIRONMENT to LOCAL
+        mock_settings.ENVIRONMENT = "LOCAL"
+
+        # Mock successful scan result
+        mock_perform_scan.return_value = {
+            "success": True,
+            "message": "Scan completed successfully",
+            "scanned_count": 5,
+            "timestamp": "2024-11-03 22:00",  # Outside market hours
+        }
+
+        response = client.post(reverse("scan"))
+
+        assert response.status_code == 200
+        # Verify perform_scan was called with debug=True in LOCAL environment
+        mock_perform_scan.assert_called_once_with(debug=True)
+
+    @patch("scanner.views.settings")
+    @patch("scanner.views.perform_scan")
+    @patch("scanner.views.r")
+    def test_scan_view_enforces_market_hours_in_production_environment(
+        self, mock_redis, mock_perform_scan, mock_settings, client
+    ):
+        """Test that scan view enforces market hours check in PRODUCTION environment."""
+        # Mock Redis lock (no existing lock)
+        mock_redis.exists.return_value = False
+        mock_redis.keys.return_value = []
+
+        # Set ENVIRONMENT to PRODUCTION
+        mock_settings.ENVIRONMENT = "PRODUCTION"
+
+        # Mock market closed result
+        mock_perform_scan.return_value = {
+            "success": False,
+            "message": "Market is closed. Scans only run during market hours (9:30 AM - 4:00 PM ET).",
+            "scanned_count": 0,
+            "timestamp": "2024-11-03 22:00",
+        }
+
+        response = client.post(reverse("scan"))
+
+        assert response.status_code == 200
+        # Verify perform_scan was called with debug=False in PRODUCTION environment
+        mock_perform_scan.assert_called_once_with(debug=False)
+
 
 @pytest.mark.django_db
 class TestOptionsListView:

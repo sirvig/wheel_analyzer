@@ -363,7 +363,16 @@ See task files for detailed implementation notes.
 - Browser compatibility testing (Chrome, Firefox, Safari)
 - Responsive design verification (desktop, tablet, mobile)
 
-### Phase 6: Create historical storage of valuation calculations
+### Phase 6: Utilize stock price for valuations
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+Utilize the marketdata api to pull stock price from /v1/stocks/quotes/{symbol}.  Use this data to populate a list of stocks from the CuratedStock list that are currently undervalued.  Display that list on the main index/home page as a widget called Targets.  We can also use this data on the Stock Valuation page (add a column with daily close price). Replace the column with Company Name
+
+### Phase 7: Create historical storage of valuation calculations
 
 **Status**: Not started
 

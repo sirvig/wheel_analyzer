@@ -1,9 +1,15 @@
 # Bugs
 
 Pending:
-(none)
+- On /Users/danvigliotti/Development/Sirvig/wheel-analyzer/templates/scanner/partials/options_results.html line 35 - getting 'str' object has no attribute 'get'.  This is happening because the dictionary being passed is actually an empty string.  I think this is happening when the data in redis times out and nothing is returned.
 
 Completed:
+- ✅ Getting "Reverse for 'scan' not found. 'scan' is not a valid view function or pattern name." when clicking on "Options Scanner" button or navigating to /scanner/
+  - **Fixed**: Added missing namespace prefix to URL template tags
+  - **Files Changed**:
+    - Modified: `templates/scanner/index.html` (changed `{% url 'scan' %}` to `{% url 'scanner:scan' %}`)
+    - Modified: `templates/scanner/partials/scan_polling.html` (changed `{% url 'scan_status' %}` to `{% url 'scanner:scan_status' %}`)
+  - **How it works**: The scanner app uses `app_name = "scanner"` in `scanner/urls.py`, creating a URL namespace. All URL references must include this namespace prefix (e.g., `scanner:scan` instead of just `scan`). Without the namespace, Django's URL reverser cannot find the matching pattern.
 - ✅ The login and logout pages are not using any styling.  They should match the styling of the main site.
   - **Fixed**: Created custom allauth templates with Flowbite/Tailwind styling
   - **Files Changed**:
