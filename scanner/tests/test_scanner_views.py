@@ -11,22 +11,27 @@ from django.urls import reverse
 class TestIndexView:
     """Tests for the scanner index view."""
 
-    def test_index_view_renders_successfully(self, client):
+    def test_index_view_renders_successfully(self, client, user):
         """Test that the index view renders without errors."""
-        with patch("scanner.views.r") as mock_redis:
+        client.force_login(user)
+
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis:
             # Mock Redis responses
+            mock_redis = mock_redis.return_value
             mock_redis.keys.return_value = []
             mock_redis.get.return_value = b"2024-11-03 10:00"
 
-            response = client.get(reverse("scanner_index"))
+            response = client.get("/scanner/")
 
             assert response.status_code == 200
             assert "last_scan" in response.context
             assert response.context["last_scan"] == "2024-11-03 10:00"
 
-    def test_index_view_displays_options_data(self, client):
+    def test_index_view_displays_options_data(self, client, user):
         """Test that the index view displays options data from Redis."""
-        with patch("scanner.views.r") as mock_redis:
+        client.force_login(user)
+
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis:
             # Mock Redis responses with sample data
             mock_redis.keys.return_value = [b"put_AAPL", b"put_MSFT"]
 
@@ -66,7 +71,7 @@ class TestIndexView:
             mock_redis.hget.side_effect = mock_hget
             mock_redis.get.return_value = b"2024-11-03 10:05"
 
-            response = client.get(reverse("scanner_index"))
+            response = client.get("/scanner/")
 
             assert response.status_code == 200
             assert "ticker_options" in response.context
@@ -75,9 +80,11 @@ class TestIndexView:
             assert len(response.context["ticker_options"]["AAPL"]) == 1
             assert len(response.context["ticker_options"]["MSFT"]) == 1
 
-    def test_index_view_handles_no_options(self, client):
+    def test_index_view_handles_no_options(self, client, user):
         """Test that the index view handles case with no options found."""
-        with patch("scanner.views.r") as mock_redis:
+        client.force_login(user)
+
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis:
             # Mock Redis responses with empty options
             mock_redis.keys.return_value = [b"put_AAPL"]
 
@@ -89,7 +96,7 @@ class TestIndexView:
             mock_redis.hget.side_effect = mock_hget
             mock_redis.get.return_value = b"2024-11-03 10:00"
 
-            response = client.get(reverse("scanner_index"))
+            response = client.get("/scanner/")
 
             assert response.status_code == 200
             assert "ticker_options" in response.context
@@ -106,7 +113,7 @@ class TestScanView:
         assert response.status_code == 405  # Method Not Allowed
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.r")
+    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_prevents_concurrent_scans(
         self, mock_redis, mock_perform_scan, client
     ):
@@ -122,9 +129,10 @@ class TestScanView:
         mock_perform_scan.assert_not_called()
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.r")
-    def test_scan_view_successful_scan(self, mock_redis, mock_perform_scan, client):
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_scan_view_successful_scan(self, mock_redis_from_url, mock_perform_scan, client):
         """Test successful scan execution."""
+        mock_redis = mock_redis_from_url.return_value
         # Mock Redis lock (no existing lock)
         mock_redis.exists.return_value = False
         mock_redis.keys.return_value = [b"put_AAPL"]
@@ -168,7 +176,7 @@ class TestScanView:
         mock_redis.delete.assert_called_once_with("scan_in_progress")
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.r")
+    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_handles_market_closed(
         self, mock_redis, mock_perform_scan, client
     ):
@@ -192,9 +200,10 @@ class TestScanView:
         mock_redis.delete.assert_called_once_with("scan_in_progress")
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.r")
-    def test_scan_view_handles_errors(self, mock_redis, mock_perform_scan, client):
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_scan_view_handles_errors(self, mock_redis_from_url, mock_perform_scan, client):
         """Test scan view handles errors gracefully."""
+        mock_redis = mock_redis_from_url.return_value
         # Mock Redis lock (no existing lock)
         mock_redis.exists.return_value = False
 
@@ -215,7 +224,7 @@ class TestScanView:
         mock_redis.delete.assert_called_once_with("scan_in_progress")
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.r")
+    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_releases_lock_on_exception(
         self, mock_redis, mock_perform_scan, client
     ):
@@ -235,7 +244,7 @@ class TestScanView:
 
     @patch("scanner.views.settings")
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.r")
+    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_bypasses_market_hours_in_local_environment(
         self, mock_redis, mock_perform_scan, mock_settings, client
     ):
@@ -263,7 +272,7 @@ class TestScanView:
 
     @patch("scanner.views.settings")
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.r")
+    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_enforces_market_hours_in_production_environment(
         self, mock_redis, mock_perform_scan, mock_settings, client
     ):
@@ -296,7 +305,7 @@ class TestOptionsListView:
 
     def test_options_list_view_renders_for_ticker(self, client):
         """Test that options list view renders for a specific ticker."""
-        with patch("scanner.views.r") as mock_redis:
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis:
             # Mock Redis responses
             aapl_options = [
                 {
@@ -453,3 +462,124 @@ class TestValuationListView:
         stocks = response.context["stocks"]
         assert stock_with_values in stocks
         assert stock_without_values in stocks
+
+
+@pytest.mark.django_db
+class TestRedisErrorHandling:
+    """Tests for Redis error handling in scanner views."""
+
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_get_scan_results_redis_connection_error(self, mock_redis_from_url):
+        """get_scan_results returns safe defaults on Redis connection error."""
+        from scanner.views import get_scan_results
+        import redis as redis_module
+        
+        # Mock Redis connection failure
+        mock_redis_from_url.side_effect = redis_module.ConnectionError("Connection refused")
+        
+        result = get_scan_results()
+        
+        # Should return safe defaults
+        assert result["ticker_options"] == {}
+        assert result["ticker_scan"] == {}
+        assert result["curated_stocks"] == {}
+        assert "Data temporarily unavailable" in result["last_scan"]
+        assert isinstance(result["curated_stocks"], dict)
+
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_get_scan_results_redis_timeout(self, mock_redis_from_url):
+        """get_scan_results returns safe defaults on Redis timeout."""
+        from scanner.views import get_scan_results
+        import redis as redis_module
+        
+        # Mock Redis timeout
+        mock_redis_from_url.side_effect = redis_module.TimeoutError("Timeout")
+        
+        result = get_scan_results()
+        
+        # Should return safe defaults
+        assert result["curated_stocks"] == {}
+        assert isinstance(result["curated_stocks"], dict)
+
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_get_scan_results_json_decode_error(self, mock_redis_from_url):
+        """get_scan_results handles malformed JSON gracefully."""
+        from scanner.views import get_scan_results
+        
+        mock_redis = mock_redis_from_url.return_value
+        mock_redis.keys.return_value = [b"put_AAPL"]
+        mock_redis.hget.return_value = b"invalid json{"
+        mock_redis.get.return_value = b"Never"
+        
+        result = get_scan_results()
+        
+        # Should handle gracefully - ticker won't be in results due to JSON error
+        assert isinstance(result["curated_stocks"], dict)
+
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_get_scan_results_none_hget_response(self, mock_redis_from_url):
+        """get_scan_results handles None response from hget."""
+        from scanner.views import get_scan_results
+        
+        mock_redis = mock_redis_from_url.return_value
+        mock_redis.keys.return_value = [b"put_AAPL"]
+        mock_redis.hget.return_value = None  # Key doesn't exist or expired
+        mock_redis.get.return_value = b"Never"
+        
+        result = get_scan_results()
+        
+        # Should handle gracefully - empty ticker_options
+        assert result["ticker_options"] == {}
+        assert isinstance(result["curated_stocks"], dict)
+
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_get_scan_results_always_returns_dict_for_curated_stocks(
+        self, mock_redis_from_url
+    ):
+        """get_scan_results always returns dict for curated_stocks, never None or string."""
+        from scanner.views import get_scan_results
+        import redis as redis_module
+        
+        # Test with various error conditions
+        test_cases = [
+            redis_module.ConnectionError("Connection failed"),
+            redis_module.TimeoutError("Timeout"),
+            Exception("Unexpected error"),
+        ]
+        
+        for error in test_cases:
+            mock_redis_from_url.side_effect = error
+            
+            result = get_scan_results()
+            
+            assert isinstance(result["curated_stocks"], dict)
+            assert result["curated_stocks"] == {}
+
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_index_view_redis_connection_error(self, mock_redis_from_url, client, user):
+        """index view handles Redis connection error gracefully."""
+        import redis as redis_module
+        
+        # Mock Redis connection failure
+        mock_redis_from_url.side_effect = redis_module.ConnectionError("Connection refused")
+        
+        client.force_login(user)
+        response = client.get("/scanner/")
+        
+        # Should render successfully with safe defaults
+        assert response.status_code == 200
+        assert "Data temporarily unavailable" in response.context["last_scan"]
+
+    @patch("scanner.views.redis.Redis.from_url")
+    def test_scan_status_view_redis_error(self, mock_redis_from_url, client, user):
+        """scan_status view handles Redis errors via get_scan_results."""
+        import redis as redis_module
+        
+        mock_redis_from_url.side_effect = redis_module.ConnectionError("Connection refused")
+        
+        client.force_login(user)
+        response = client.get("/scanner/scan/status/")
+        
+        # Should render successfully with safe defaults
+        assert response.status_code == 200
+        assert response.context["curated_stocks"] == {}

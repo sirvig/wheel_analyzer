@@ -163,9 +163,11 @@ See `AGENTS.md` for detailed development guidelines.
 - Comprehensive testing and dark mode support
 
 **Recent Updates** (Nov 9, 2025):
-- ✅ Fixed scanner URL routing issue
+- ✅ Fixed scanner URL routing issue (namespace bug)
 - ✅ Added preferred valuation highlighting in UI
 - ✅ Implemented LOCAL environment market hours bypass for development
+- ✅ Fixed critical Redis timeout bug with defense-in-depth error handling
+- ✅ Added comprehensive test suite (33 new tests for error scenarios)
 
 **Next Phase**: Phase 6 - Stock Price Integration
 - Pull current prices from market data API
@@ -185,7 +187,10 @@ just test scanner/tests/test_scanner_views.py
 uv run pytest --cov
 ```
 
-Total test coverage: 96 tests (56 unit + 40 integration)
+Total test coverage: 129 tests (74 unit + 55 integration)
+- Template filter tests with type safety validation
+- Redis error handling and timeout scenarios
+- Integration tests for graceful degradation
 
 ## Contributing
 

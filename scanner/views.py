@@ -21,26 +21,70 @@ SCAN_LOCK_TIMEOUT = 600  # 10 minutes
 
 @login_required
 def index(request):
-    r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
-    keys = r.keys("put_*")
+    """
+    Display scanner index page with cached options results.
 
-    context = {}
-    ticker_options = {}
-    ticker_scan = {}
+    Returns:
+        Rendered scanner/index.html template with options data
 
-    for hash_key in keys:
-        ticker = hash_key.decode("utf-8").split("_")[1]
-        options = json.loads(r.hget(hash_key, "options").decode("utf-8"))
-        if len(options) > 0:
-            ticker_options[ticker] = options
-            ticker_scan[ticker] = r.hget(hash_key, "last_scan").decode("utf-8")
+    Note:
+        Returns safe defaults if Redis is unavailable.
+    """
+    try:
+        r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
+        keys = r.keys("put_*")
 
-    sorted_ticker_options = {k: ticker_options[k] for k in sorted(ticker_options)}
-    context["ticker_options"] = sorted_ticker_options
-    context["ticker_scan"] = ticker_scan
-    context["last_scan"] = r.get("last_run").decode("utf-8")
+        context = {}
+        ticker_options = {}
+        ticker_scan = {}
 
-    return render(request, "scanner/index.html", context)
+        for hash_key in keys:
+            ticker = hash_key.decode("utf-8").split("_")[1]
+
+            # Defensive: handle None return from hget
+            options_data = r.hget(hash_key, "options")
+            if options_data:
+                try:
+                    options = json.loads(options_data.decode("utf-8"))
+                    if len(options) > 0:
+                        ticker_options[ticker] = options
+
+                        last_scan_data = r.hget(hash_key, "last_scan")
+                        if last_scan_data:
+                            ticker_scan[ticker] = last_scan_data.decode("utf-8")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to decode options JSON for {ticker}: {e}")
+                    continue
+
+        sorted_ticker_options = {k: ticker_options[k] for k in sorted(ticker_options)}
+        context["ticker_options"] = sorted_ticker_options
+        context["ticker_scan"] = ticker_scan
+
+        # Defensive: handle None return from get
+        last_run_data = r.get("last_run")
+        context["last_scan"] = (
+            last_run_data.decode("utf-8") if last_run_data else "Never"
+        )
+
+        return render(request, "scanner/index.html", context)
+
+    except redis.RedisError as e:
+        logger.warning(f"Redis connection error in index view: {e}", exc_info=True)
+        context = {
+            "ticker_options": {},
+            "ticker_scan": {},
+            "last_scan": "Data temporarily unavailable. Please refresh the page.",
+        }
+        return render(request, "scanner/index.html", context)
+
+    except Exception as e:
+        logger.warning(f"Unexpected error in index view: {e}", exc_info=True)
+        context = {
+            "ticker_options": {},
+            "ticker_scan": {},
+            "last_scan": "Data temporarily unavailable. Please refresh the page.",
+        }
+        return render(request, "scanner/index.html", context)
 
 
 @login_required
@@ -96,49 +140,100 @@ def run_scan_in_background():
 
 
 def get_scan_results():
-    r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
     """
     Helper function to fetch current scan results from Redis.
 
     Returns:
         dict: Context with ticker_options, ticker_scan, last_scan, and curated_stocks
+
+    Note:
+        Returns safe defaults (empty dicts) if Redis is unavailable.
+        Logs warnings but does not raise exceptions.
     """
-    keys = r.keys("put_*")
-    ticker_options = {}
-    ticker_scan = {}
+    try:
+        r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
+        keys = r.keys("put_*")
+        ticker_options = {}
+        ticker_scan = {}
 
-    for hash_key in keys:
-        ticker = hash_key.decode("utf-8").split("_")[1]
-        options_data = r.hget(hash_key, "options")
-        if options_data:
-            options = json.loads(options_data.decode("utf-8"))
-            if len(options) > 0:
-                ticker_options[ticker] = options
-                last_scan_data = r.hget(hash_key, "last_scan")
-                if last_scan_data:
-                    ticker_scan[ticker] = last_scan_data.decode("utf-8")
+        for hash_key in keys:
+            ticker = hash_key.decode("utf-8").split("_")[1]
+            options_data = r.hget(hash_key, "options")
+            if options_data:
+                try:
+                    options = json.loads(options_data.decode("utf-8"))
+                    if len(options) > 0:
+                        ticker_options[ticker] = options
+                        last_scan_data = r.hget(hash_key, "last_scan")
+                        if last_scan_data:
+                            ticker_scan[ticker] = last_scan_data.decode("utf-8")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to decode options JSON for {ticker}: {e}")
+                    continue
 
-    sorted_ticker_options = {k: ticker_options[k] for k in sorted(ticker_options)}
+        sorted_ticker_options = {k: ticker_options[k] for k in sorted(ticker_options)}
 
-    # Get last_run status
-    last_run_data = r.get("last_run")
-    last_scan = last_run_data.decode("utf-8") if last_run_data else "Never"
+        # Get last_run status
+        last_run_data = r.get("last_run")
+        last_scan = last_run_data.decode("utf-8") if last_run_data else "Never"
 
-    # Fetch CuratedStock instances for all symbols in results
-    if sorted_ticker_options:
-        symbols = list(sorted_ticker_options.keys())
-        curated_stocks = CuratedStock.objects.filter(symbol__in=symbols, active=True)
-        curated_stocks_dict = {stock.symbol: stock for stock in curated_stocks}
-    else:
-        curated_stocks_dict = {}
+        # Fetch CuratedStock instances for all symbols in results
+        if sorted_ticker_options:
+            symbols = list(sorted_ticker_options.keys())
+            curated_stocks = CuratedStock.objects.filter(
+                symbol__in=symbols, active=True
+            )
+            curated_stocks_dict = {stock.symbol: stock for stock in curated_stocks}
+        else:
+            curated_stocks_dict = {}
 
-    return {
-        "ticker_options": sorted_ticker_options,
-        "ticker_scan": ticker_scan,
-        "last_scan": last_scan,
-        "curated_stocks": curated_stocks_dict,
-        "is_local_environment": settings.ENVIRONMENT == "LOCAL",
-    }
+        # Defensive: ensure curated_stocks_dict is actually a dict
+        if not isinstance(curated_stocks_dict, dict):
+            logger.warning(
+                f"curated_stocks_dict is not a dict: {type(curated_stocks_dict).__name__}. "
+                f"Resetting to empty dict."
+            )
+            curated_stocks_dict = {}
+
+        return {
+            "ticker_options": sorted_ticker_options,
+            "ticker_scan": ticker_scan,
+            "last_scan": last_scan,
+            "curated_stocks": curated_stocks_dict,
+            "is_local_environment": settings.ENVIRONMENT == "LOCAL",
+        }
+
+    except redis.RedisError as e:
+        logger.warning(
+            f"Redis connection error in get_scan_results: {e}", exc_info=True
+        )
+        return {
+            "ticker_options": {},
+            "ticker_scan": {},
+            "last_scan": "Data temporarily unavailable. Please refresh the page.",
+            "curated_stocks": {},  # ALWAYS dict, never None
+            "is_local_environment": settings.ENVIRONMENT == "LOCAL",
+        }
+
+    except json.JSONDecodeError as e:
+        logger.warning(f"JSON decode error in get_scan_results: {e}", exc_info=True)
+        return {
+            "ticker_options": {},
+            "ticker_scan": {},
+            "last_scan": "Data temporarily unavailable. Please refresh the page.",
+            "curated_stocks": {},
+            "is_local_environment": settings.ENVIRONMENT == "LOCAL",
+        }
+
+    except Exception as e:
+        logger.warning(f"Unexpected error in get_scan_results: {e}", exc_info=True)
+        return {
+            "ticker_options": {},
+            "ticker_scan": {},
+            "last_scan": "Data temporarily unavailable. Please refresh the page.",
+            "curated_stocks": {},
+            "is_local_environment": settings.ENVIRONMENT == "LOCAL",
+        }
 
 
 @login_required

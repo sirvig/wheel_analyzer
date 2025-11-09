@@ -269,6 +269,7 @@ All curated stocks stay up-to-date with intrinsic valuations through daily rolli
 - ✅ `026-valuation-page-backend.md` - Create backend view and URL for valuations page
 - ✅ `027-valuation-page-frontend.md` - Create frontend template and navbar navigation
 - ⏳ `028-testing-and-refinement.md` - Add comprehensive tests and perform manual testing (tests pending)
+- ✅ `029-fix-redis-timeout-bug.md` - Fix 'str' object has no attribute 'get' error when Redis data expires
 
 **Summary**:
 Successfully added visual indicators to the options scanner showing whether option strike prices are at or below intrinsic value, and created a comprehensive valuations page for the curated stock list.
@@ -318,6 +319,16 @@ Successfully added visual indicators to the options scanner showing whether opti
 - Integration tests for `valuation_list_view`
 - Integration tests for scanner view context
 - Manual testing of visual indicators and responsive design
+
+**Bug Fixes** (Task 029):
+- Fixed Redis timeout bug causing `'str' object has no attribute 'get'` error
+- Implemented hybrid defense-in-depth approach:
+  - Backend validation with Redis error handling
+  - Defensive template filter with type checking
+  - Enhanced logging for debugging
+- Comprehensive unit and integration tests with Redis mocks
+- Graceful degradation when Redis data unavailable (shows gray "-" badges)
+- User-friendly error messages ("Data temporarily unavailable")
 
 See task files for detailed implementation notes.
 

@@ -1,9 +1,22 @@
 # Bugs
 
 Pending:
-- On /Users/danvigliotti/Development/Sirvig/wheel-analyzer/templates/scanner/partials/options_results.html line 35 - getting 'str' object has no attribute 'get'.  This is happening because the dictionary being passed is actually an empty string.  I think this is happening when the data in redis times out and nothing is returned.
 
 Completed:
+- ✅ Getting 'str' object has no attribute 'get' on options_results.html line 35 when Redis data expires
+  - **Fixed**: Implemented hybrid defense-in-depth approach with backend validation + defensive template handling + Redis error recovery
+  - **Files Changed**:
+    - Modified: `scanner/views.py` (added try/except blocks for Redis operations in `get_scan_results()` and `index()` views, ensured `curated_stocks` always dict)
+    - Modified: `scanner/templatetags/options_extras.py` (added type checking to `dict_get` and `lookup` filters with warning logs)
+    - Created: `scanner/tests/test_template_filters.py` (18 unit tests for template filters - all passing)
+    - Created: `scanner/tests/test_redis_integration.py` (8 integration tests for Redis failures - all passing)
+    - Modified: `scanner/tests/test_scanner_views.py` (added 7 Redis error handling tests - 5 passing, 2 skipped due to test infrastructure)
+  - **How it works**: 
+    - **Backend Layer**: Views catch Redis exceptions (ConnectionError, TimeoutError, JSONDecodeError) and return safe defaults (empty dicts). The `get_scan_results()` function validates that `curated_stocks` is always a dictionary before returning context. Individual JSON decode errors are caught per-ticker and logged, allowing partial results.
+    - **Template Layer**: The `dict_get` filter performs `isinstance()` check before calling `.get()`, returning None for non-dict inputs and logging warnings at WARNING level for debugging.
+    - **UX Layer**: When Redis fails, users see "Data temporarily unavailable. Please refresh the page." message and gray "-" badges for stocks (indicating no valuation data). Application remains fully functional.
+    - **Defense in depth**: Even if backend validation fails, template filter prevents crashes. Even if template filter fails, existing template logic handles None gracefully by showing gray badges.
+    - **Testing**: 33 new tests (18 unit + 8 integration + 7 view tests) verify graceful degradation using Redis mocks. All tests use `@patch` mocks to avoid requiring actual Redis instance during testing.
 - ✅ Getting "Reverse for 'scan' not found. 'scan' is not a valid view function or pattern name." when clicking on "Options Scanner" button or navigating to /scanner/
   - **Fixed**: Added missing namespace prefix to URL template tags
   - **Files Changed**:
