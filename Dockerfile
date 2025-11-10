@@ -41,7 +41,7 @@ ENV DJANGO_SETTINGS_MODULE=wheel_analyzer.settings
 ENV DJANGO_MANAGEPY_MIGRATE=on
 
 # Call collectstatic (customize the following line with the minimal environment variables needed for manage.py to run):
-RUN DATABASE_URL='' uv run manage.py collectstatic --noinput
+RUN DATABASE_URL='' REDIS_URL='' uv run manage.py collectstatic --noinput
 
 # # Tell uWSGI where to find your wsgi file (change this):
 # ENV UWSGI_WSGI_FILE=wheel_analyzer/wsgi.py
