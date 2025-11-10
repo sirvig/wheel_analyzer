@@ -953,26 +953,21 @@ class Command(BaseCommand):
 
         cleared = 0
         for symbol in symbols:
-            # Clear EARNINGS cache (new format)
+            # Clear EARNINGS cache
             if cache.delete(
                 f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:earnings:{symbol}"
             ):
                 cleared += 1
-            # Clear OVERVIEW cache (new format)
+            # Clear OVERVIEW cache
             if cache.delete(
                 f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:overview:{symbol}"
             ):
                 cleared += 1
-            # Clear CASH_FLOW cache (new format)
+            # Clear CASH_FLOW cache
             if cache.delete(
                 f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:cash_flow:{symbol}"
             ):
                 cleared += 1
-
-            # Also clear old format keys for backward compatibility (can be removed later)
-            cache.delete(f"av_earnings_{symbol}")
-            cache.delete(f"av_overview_{symbol}")
-            cache.delete(f"av_cashflow_{symbol}")
 
         self.stdout.write(self.style.SUCCESS(f"Cleared {cleared} cached entries"))
         logger.info(f"Cleared {cleared} Alpha Vantage cache entries")

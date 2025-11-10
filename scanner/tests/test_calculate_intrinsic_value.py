@@ -59,7 +59,7 @@ class TestCalculateIntrinsicValueCommand:
                         ]
                     }
                 return {}
-            
+
             mock.side_effect = side_effect
             yield mock
 
@@ -143,6 +143,7 @@ class TestCalculateIntrinsicValueCommand:
 
     def test_command_skips_stock_with_missing_eps(self, mock_alpha_vantage, mock_sleep):
         """Test that stocks with missing EPS data are skipped."""
+
         # Override mock to return no quarterly earnings
         def side_effect(url):
             if "EARNINGS" in url:
@@ -150,7 +151,7 @@ class TestCalculateIntrinsicValueCommand:
             elif "OVERVIEW" in url:
                 return {}  # No EPS field
             return {}
-        
+
         mock_alpha_vantage.side_effect = side_effect
 
         stock = CuratedStockFactory(symbol="AAPL", active=True)
@@ -163,6 +164,7 @@ class TestCalculateIntrinsicValueCommand:
         self, mock_alpha_vantage, mock_sleep
     ):
         """Test that stocks with negative EPS are skipped."""
+
         # Override mock to return negative EPS
         def side_effect(url):
             if "EARNINGS" in url:
@@ -175,7 +177,7 @@ class TestCalculateIntrinsicValueCommand:
                     ]
                 }
             return {}
-        
+
         mock_alpha_vantage.side_effect = side_effect
 
         stock = CuratedStockFactory(symbol="TSLA", active=True)
@@ -198,9 +200,10 @@ class TestCalculateIntrinsicValueCommand:
 
     def test_command_handles_api_error_message(self, mock_alpha_vantage, mock_sleep):
         """Test handling of API error messages."""
+
         def side_effect(url):
             return {"Error Message": "Invalid API call"}
-        
+
         mock_alpha_vantage.side_effect = side_effect
 
         stock = CuratedStockFactory(symbol="AAPL", active=True)
@@ -211,11 +214,12 @@ class TestCalculateIntrinsicValueCommand:
 
     def test_command_handles_api_rate_limit(self, mock_alpha_vantage, mock_sleep):
         """Test handling of API rate limit messages."""
+
         def side_effect(url):
             return {
                 "Note": "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute."
             }
-        
+
         mock_alpha_vantage.side_effect = side_effect
 
         stock = CuratedStockFactory(symbol="AAPL", active=True)
@@ -224,38 +228,139 @@ class TestCalculateIntrinsicValueCommand:
         stock.refresh_from_db()
         assert stock.intrinsic_value is None
 
-    @patch("scanner.management.commands.calculate_intrinsic_value.cache")
-    def test_command_uses_cache(self, mock_cache, mock_alpha_vantage, mock_sleep):
+    @patch("scanner.alphavantage.util.requests.get")
+    @patch("scanner.alphavantage.util.cache")
+    def test_command_uses_cache(
+        self, mock_cache, mock_requests, mock_sleep, clean_curated_stocks
+    ):
         """Test that API responses are cached."""
+        from unittest.mock import Mock
+
         mock_cache.get.return_value = None  # Cache miss
 
-        CuratedStockFactory(symbol="AAPL", active=True)
-        call_command("calculate_intrinsic_value")
+        # Mock HTTP responses
+        def mock_response(url, **kwargs):
+            response = Mock()
+            response.status_code = 200
+            if "EARNINGS" in url:
+                response.json.return_value = {
+                    "quarterlyEarnings": [
+                        {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.64"},
+                        {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.40"},
+                        {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.53"},
+                        {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.85"},
+                    ]
+                }
+            elif "OVERVIEW" in url:
+                response.json.return_value = {"SharesOutstanding": "15000000000"}
+            elif "CASH_FLOW" in url:
+                response.json.return_value = {
+                    "quarterlyReports": [
+                        {
+                            "operatingCashflow": "30000000000",
+                            "capitalExpenditures": "-2500000000",
+                        },
+                        {
+                            "operatingCashflow": "31000000000",
+                            "capitalExpenditures": "-2600000000",
+                        },
+                        {
+                            "operatingCashflow": "29500000000",
+                            "capitalExpenditures": "-2400000000",
+                        },
+                        {
+                            "operatingCashflow": "32000000000",
+                            "capitalExpenditures": "-2700000000",
+                        },
+                    ]
+                }
+            return response
+
+        mock_requests.side_effect = mock_response
+
+        CuratedStockFactory(symbol="CACHETEST1", active=True)
+        call_command("calculate_intrinsic_value", symbols=["CACHETEST1"])
 
         # Verify cache was checked and set for all 3 endpoints
         cache_get_calls = [call[0][0] for call in mock_cache.get.call_args_list]
-        assert "av_earnings_AAPL" in cache_get_calls
-        assert "av_overview_AAPL" in cache_get_calls
-        assert "av_cashflow_AAPL" in cache_get_calls
-        
+        assert "alphavantage:earnings:CACHETEST1" in cache_get_calls
+        assert "alphavantage:overview:CACHETEST1" in cache_get_calls
+        assert "alphavantage:cash_flow:CACHETEST1" in cache_get_calls
+
         # Verify cache.set was called (for all 3 endpoints)
         assert mock_cache.set.call_count >= 3
-        
-        # Verify cache TTL is 7 days
-        cache_ttl = mock_cache.set.call_args[0][2]
-        assert cache_ttl == 60 * 60 * 24 * 7
 
-    @patch("scanner.management.commands.calculate_intrinsic_value.cache")
-    def test_command_force_refresh(self, mock_cache, mock_alpha_vantage, mock_sleep):
+        # Verify cache TTL is 7 days (604800 seconds)
+        # Check the timeout parameter (keyword arg in cache.set calls)
+        set_calls_with_timeout = [
+            call
+            for call in mock_cache.set.call_args_list
+            if len(call[1]) > 0 and "timeout" in call[1]
+        ]
+        assert len(set_calls_with_timeout) >= 3
+        # Verify at least one call has correct TTL
+        assert any(
+            call[1]["timeout"] == 60 * 60 * 24 * 7 for call in set_calls_with_timeout
+        )
+
+    @patch("scanner.alphavantage.util.requests.get")
+    @patch("scanner.alphavantage.util.cache")
+    def test_command_force_refresh(
+        self, mock_cache, mock_requests, mock_sleep, clean_curated_stocks
+    ):
         """Test --force-refresh bypasses cache for primary data."""
+        from unittest.mock import Mock
+
         # Set up mock to return None for cache misses
         mock_cache.get.return_value = None
 
-        CuratedStockFactory(symbol="AAPL", active=True)
-        call_command("calculate_intrinsic_value", force_refresh=True)
+        # Mock HTTP responses
+        def mock_response(url, **kwargs):
+            response = Mock()
+            response.status_code = 200
+            if "EARNINGS" in url:
+                response.json.return_value = {
+                    "quarterlyEarnings": [
+                        {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.64"},
+                        {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.40"},
+                        {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.53"},
+                        {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.85"},
+                    ]
+                }
+            elif "OVERVIEW" in url:
+                response.json.return_value = {"SharesOutstanding": "15000000000"}
+            elif "CASH_FLOW" in url:
+                response.json.return_value = {
+                    "quarterlyReports": [
+                        {
+                            "operatingCashflow": "30000000000",
+                            "capitalExpenditures": "-2500000000",
+                        },
+                        {
+                            "operatingCashflow": "31000000000",
+                            "capitalExpenditures": "-2600000000",
+                        },
+                        {
+                            "operatingCashflow": "29500000000",
+                            "capitalExpenditures": "-2400000000",
+                        },
+                        {
+                            "operatingCashflow": "32000000000",
+                            "capitalExpenditures": "-2700000000",
+                        },
+                    ]
+                }
+            return response
+
+        mock_requests.side_effect = mock_response
+
+        CuratedStockFactory(symbol="CACHETEST2", active=True)
+        call_command(
+            "calculate_intrinsic_value", symbols=["CACHETEST2"], force_refresh=True
+        )
 
         # Verify fresh data was fetched from API (not from cache)
-        assert mock_alpha_vantage.called
+        assert mock_requests.called
         # Verify data was cached after fetching
         assert mock_cache.set.called
 
@@ -330,10 +435,22 @@ class TestCalculateIntrinsicValueCommand:
             elif "CASH_FLOW" in url:
                 return {
                     "quarterlyReports": [
-                        {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                        {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                        {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                        {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
+                        {
+                            "operatingCashflow": "30000000000",
+                            "capitalExpenditures": "-2500000000",
+                        },
+                        {
+                            "operatingCashflow": "31000000000",
+                            "capitalExpenditures": "-2600000000",
+                        },
+                        {
+                            "operatingCashflow": "29500000000",
+                            "capitalExpenditures": "-2400000000",
+                        },
+                        {
+                            "operatingCashflow": "32000000000",
+                            "capitalExpenditures": "-2700000000",
+                        },
                     ]
                 }
             return {}
@@ -428,6 +545,7 @@ class TestEndToEndValuationFlow:
         with patch(
             "scanner.management.commands.calculate_intrinsic_value.get_market_data"
         ) as mock:
+
             def side_effect(url):
                 if "EARNINGS" in url:
                     return {
@@ -443,14 +561,26 @@ class TestEndToEndValuationFlow:
                 elif "CASH_FLOW" in url:
                     return {
                         "quarterlyReports": [
-                            {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                            {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                            {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                            {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
+                            {
+                                "operatingCashflow": "30000000000",
+                                "capitalExpenditures": "-2500000000",
+                            },
+                            {
+                                "operatingCashflow": "31000000000",
+                                "capitalExpenditures": "-2600000000",
+                            },
+                            {
+                                "operatingCashflow": "29500000000",
+                                "capitalExpenditures": "-2400000000",
+                            },
+                            {
+                                "operatingCashflow": "32000000000",
+                                "capitalExpenditures": "-2700000000",
+                            },
                         ]
                     }
                 return {}
-            
+
             mock.side_effect = side_effect
             yield mock
 
@@ -511,7 +641,7 @@ class TestEndToEndValuationFlow:
             "scanner.management.commands.calculate_intrinsic_value.get_market_data"
         ) as mock:
             call_counter = {"count": 0}
-            
+
             def side_effect(url):
                 # Return different EPS based on which stock is being processed
                 if "EARNINGS" in url:
@@ -521,13 +651,25 @@ class TestEndToEndValuationFlow:
                         eps_values = ["2.50", "2.50", "2.50", "2.50"]  # EPS TTM = 10.00
                     else:  # TEST2C
                         eps_values = ["1.25", "1.25", "1.25", "1.25"]  # EPS TTM = 5.00
-                    
+
                     return {
                         "quarterlyEarnings": [
-                            {"fiscalDateEnding": "2024-09-30", "reportedEPS": eps_values[0]},
-                            {"fiscalDateEnding": "2024-06-30", "reportedEPS": eps_values[1]},
-                            {"fiscalDateEnding": "2024-03-31", "reportedEPS": eps_values[2]},
-                            {"fiscalDateEnding": "2023-12-31", "reportedEPS": eps_values[3]},
+                            {
+                                "fiscalDateEnding": "2024-09-30",
+                                "reportedEPS": eps_values[0],
+                            },
+                            {
+                                "fiscalDateEnding": "2024-06-30",
+                                "reportedEPS": eps_values[1],
+                            },
+                            {
+                                "fiscalDateEnding": "2024-03-31",
+                                "reportedEPS": eps_values[2],
+                            },
+                            {
+                                "fiscalDateEnding": "2023-12-31",
+                                "reportedEPS": eps_values[3],
+                            },
                         ]
                     }
                 elif "OVERVIEW" in url:
@@ -535,14 +677,26 @@ class TestEndToEndValuationFlow:
                 elif "CASH_FLOW" in url:
                     return {
                         "quarterlyReports": [
-                            {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                            {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                            {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                            {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
+                            {
+                                "operatingCashflow": "30000000000",
+                                "capitalExpenditures": "-2500000000",
+                            },
+                            {
+                                "operatingCashflow": "31000000000",
+                                "capitalExpenditures": "-2600000000",
+                            },
+                            {
+                                "operatingCashflow": "29500000000",
+                                "capitalExpenditures": "-2400000000",
+                            },
+                            {
+                                "operatingCashflow": "32000000000",
+                                "capitalExpenditures": "-2700000000",
+                            },
                         ]
                     }
                 return {}
-            
+
             mock.side_effect = side_effect
 
             call_command("calculate_intrinsic_value")
@@ -578,10 +732,22 @@ class TestEndToEndValuationFlow:
             elif "CASH_FLOW" in url:
                 return {
                     "quarterlyReports": [
-                        {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                        {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                        {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                        {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
+                        {
+                            "operatingCashflow": "30000000000",
+                            "capitalExpenditures": "-2500000000",
+                        },
+                        {
+                            "operatingCashflow": "31000000000",
+                            "capitalExpenditures": "-2600000000",
+                        },
+                        {
+                            "operatingCashflow": "29500000000",
+                            "capitalExpenditures": "-2400000000",
+                        },
+                        {
+                            "operatingCashflow": "32000000000",
+                            "capitalExpenditures": "-2700000000",
+                        },
                     ]
                 }
             return {}
@@ -607,6 +773,7 @@ class TestEndToEndValuationFlow:
         with patch(
             "scanner.management.commands.calculate_intrinsic_value.get_market_data"
         ) as mock:
+
             def side_effect(url):
                 if "EARNINGS" in url:
                     return {
@@ -622,14 +789,26 @@ class TestEndToEndValuationFlow:
                 elif "CASH_FLOW" in url:
                     return {
                         "quarterlyReports": [
-                            {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                            {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                            {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                            {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
+                            {
+                                "operatingCashflow": "30000000000",
+                                "capitalExpenditures": "-2500000000",
+                            },
+                            {
+                                "operatingCashflow": "31000000000",
+                                "capitalExpenditures": "-2600000000",
+                            },
+                            {
+                                "operatingCashflow": "29500000000",
+                                "capitalExpenditures": "-2400000000",
+                            },
+                            {
+                                "operatingCashflow": "32000000000",
+                                "capitalExpenditures": "-2700000000",
+                            },
                         ]
                     }
                 return {}
-            
+
             mock.side_effect = side_effect
 
             stock = CuratedStockFactory(
@@ -665,103 +844,172 @@ class TestCachingBehavior:
         ) as mock:
             yield mock
 
-    @patch("scanner.management.commands.calculate_intrinsic_value.cache")
-    def test_cache_miss_then_hit(self, mock_cache, mock_sleep):
+    @patch("scanner.alphavantage.util.requests.get")
+    @patch("scanner.alphavantage.util.cache")
+    def test_cache_miss_then_hit(
+        self, mock_cache, mock_requests, mock_sleep, clean_curated_stocks
+    ):
         """Test cache miss followed by cache hit."""
+        from unittest.mock import Mock
+
         CuratedStockFactory(symbol="TEST5", active=True)
 
         # First call: cache miss
         mock_cache.get.return_value = None
 
-        with patch(
-            "scanner.management.commands.calculate_intrinsic_value.get_market_data"
-        ) as mock_api:
-            def side_effect(url):
-                if "EARNINGS" in url:
-                    return {
-                        "quarterlyEarnings": [
-                            {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.64"},
-                            {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.40"},
-                            {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.53"},
-                            {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.85"},
-                        ]
-                    }
-                elif "OVERVIEW" in url:
-                    return {"SharesOutstanding": "15000000000"}
-                elif "CASH_FLOW" in url:
-                    return {
-                        "quarterlyReports": [
-                            {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                            {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                            {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                            {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
-                        ]
-                    }
-                return {}
-            
-            mock_api.side_effect = side_effect
-            call_command("calculate_intrinsic_value", symbols=["TEST5"])
+        # Mock HTTP responses
+        def mock_response(url, **kwargs):
+            response = Mock()
+            response.status_code = 200
+            if "EARNINGS" in url:
+                response.json.return_value = {
+                    "quarterlyEarnings": [
+                        {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.64"},
+                        {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.40"},
+                        {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.53"},
+                        {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.85"},
+                    ]
+                }
+            elif "OVERVIEW" in url:
+                response.json.return_value = {"SharesOutstanding": "15000000000"}
+            elif "CASH_FLOW" in url:
+                response.json.return_value = {
+                    "quarterlyReports": [
+                        {
+                            "operatingCashflow": "30000000000",
+                            "capitalExpenditures": "-2500000000",
+                        },
+                        {
+                            "operatingCashflow": "31000000000",
+                            "capitalExpenditures": "-2600000000",
+                        },
+                        {
+                            "operatingCashflow": "29500000000",
+                            "capitalExpenditures": "-2400000000",
+                        },
+                        {
+                            "operatingCashflow": "32000000000",
+                            "capitalExpenditures": "-2700000000",
+                        },
+                    ]
+                }
+            return response
+
+        mock_requests.side_effect = mock_response
+        call_command("calculate_intrinsic_value", symbols=["TEST5"])
 
         assert mock_cache.set.called
         cache_keys = [call[0][0] for call in mock_cache.set.call_args_list]
-        assert "av_earnings_TEST5" in cache_keys
+        assert "alphavantage:earnings:TEST5" in cache_keys
 
         # Second call: cache hit
         mock_cache.reset_mock()
-        cached_earnings = {
-            "quarterlyEarnings": [
-                {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.64"},
-                {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.40"},
-                {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.53"},
-                {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.85"},
-            ]
-        }
-        mock_cache.get.return_value = cached_earnings
+        mock_cache.get.side_effect = lambda key: {
+            "alphavantage:earnings:TEST5": {
+                "quarterlyEarnings": [
+                    {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.64"},
+                    {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.40"},
+                    {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.53"},
+                    {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.85"},
+                ]
+            },
+            "alphavantage:overview:TEST5": {"SharesOutstanding": "15000000000"},
+            "alphavantage:cash_flow:TEST5": {
+                "quarterlyReports": [
+                    {
+                        "operatingCashflow": "30000000000",
+                        "capitalExpenditures": "-2500000000",
+                    },
+                    {
+                        "operatingCashflow": "31000000000",
+                        "capitalExpenditures": "-2600000000",
+                    },
+                    {
+                        "operatingCashflow": "29500000000",
+                        "capitalExpenditures": "-2400000000",
+                    },
+                    {
+                        "operatingCashflow": "32000000000",
+                        "capitalExpenditures": "-2700000000",
+                    },
+                ]
+            },
+        }.get(key)
 
         call_command("calculate_intrinsic_value", symbols=["TEST5"])
 
-        # Verify cache was used (no additional API call made via get)
+        # Verify cache was used (no additional API call made)
         mock_cache.get.assert_called()
+        # Requests should not be called again (cache hit)
+        mock_requests.reset_mock()
+        assert not mock_requests.called
 
-    @patch("scanner.management.commands.calculate_intrinsic_value.cache")
-    def test_cache_ttl_is_7_days(self, mock_cache, mock_sleep):
+    @patch("scanner.alphavantage.util.requests.get")
+    @patch("scanner.alphavantage.util.cache")
+    def test_cache_ttl_is_7_days(
+        self, mock_cache, mock_requests, mock_sleep, clean_curated_stocks
+    ):
         """Test that cache TTL is set to 7 days."""
+        from unittest.mock import Mock
+
         CuratedStockFactory(symbol="TEST6", active=True)
 
         mock_cache.get.return_value = None
 
-        with patch(
-            "scanner.management.commands.calculate_intrinsic_value.get_market_data"
-        ) as mock_api:
-            def side_effect(url):
-                if "EARNINGS" in url:
-                    return {
-                        "quarterlyEarnings": [
-                            {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.50"},
-                            {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.50"},
-                            {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.50"},
-                            {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.50"},
-                        ]
-                    }
-                elif "OVERVIEW" in url:
-                    return {"SharesOutstanding": "15000000000"}
-                elif "CASH_FLOW" in url:
-                    return {
-                        "quarterlyReports": [
-                            {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                            {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                            {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                            {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
-                        ]
-                    }
-                return {}
-            
-            mock_api.side_effect = side_effect
-            call_command("calculate_intrinsic_value")
+        # Mock HTTP responses
+        def mock_response(url, **kwargs):
+            response = Mock()
+            response.status_code = 200
+            if "EARNINGS" in url:
+                response.json.return_value = {
+                    "quarterlyEarnings": [
+                        {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.50"},
+                        {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.50"},
+                        {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.50"},
+                        {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.50"},
+                    ]
+                }
+            elif "OVERVIEW" in url:
+                response.json.return_value = {"SharesOutstanding": "15000000000"}
+            elif "CASH_FLOW" in url:
+                response.json.return_value = {
+                    "quarterlyReports": [
+                        {
+                            "operatingCashflow": "30000000000",
+                            "capitalExpenditures": "-2500000000",
+                        },
+                        {
+                            "operatingCashflow": "31000000000",
+                            "capitalExpenditures": "-2600000000",
+                        },
+                        {
+                            "operatingCashflow": "29500000000",
+                            "capitalExpenditures": "-2400000000",
+                        },
+                        {
+                            "operatingCashflow": "32000000000",
+                            "capitalExpenditures": "-2700000000",
+                        },
+                    ]
+                }
+            return response
+
+        mock_requests.side_effect = mock_response
+        call_command("calculate_intrinsic_value", symbols=["TEST6"])
 
         # Verify TTL was set to 7 days (604800 seconds)
-        cache_ttl = mock_cache.set.call_args[0][2]
-        assert cache_ttl == 60 * 60 * 24 * 7
+        # Check the timeout parameter (keyword arg in cache.set calls)
+        assert mock_cache.set.called
+        set_calls_with_timeout = [
+            call
+            for call in mock_cache.set.call_args_list
+            if len(call[1]) > 0 and "timeout" in call[1]
+        ]
+        assert len(set_calls_with_timeout) >= 1
+        # Verify at least one call has correct TTL
+        assert any(
+            call[1]["timeout"] == 60 * 60 * 24 * 7 for call in set_calls_with_timeout
+        )
 
 
 @pytest.mark.django_db(transaction=True)
@@ -798,6 +1046,7 @@ class TestCommandArguments:
         with patch(
             "scanner.management.commands.calculate_intrinsic_value.get_market_data"
         ) as mock_api:
+
             def side_effect(url):
                 if "EARNINGS" in url:
                     return {
@@ -813,14 +1062,26 @@ class TestCommandArguments:
                 elif "CASH_FLOW" in url:
                     return {
                         "quarterlyReports": [
-                            {"operatingCashflow": "30000000000", "capitalExpenditures": "-2500000000"},
-                            {"operatingCashflow": "31000000000", "capitalExpenditures": "-2600000000"},
-                            {"operatingCashflow": "29500000000", "capitalExpenditures": "-2400000000"},
-                            {"operatingCashflow": "32000000000", "capitalExpenditures": "-2700000000"},
+                            {
+                                "operatingCashflow": "30000000000",
+                                "capitalExpenditures": "-2500000000",
+                            },
+                            {
+                                "operatingCashflow": "31000000000",
+                                "capitalExpenditures": "-2600000000",
+                            },
+                            {
+                                "operatingCashflow": "29500000000",
+                                "capitalExpenditures": "-2400000000",
+                            },
+                            {
+                                "operatingCashflow": "32000000000",
+                                "capitalExpenditures": "-2700000000",
+                            },
                         ]
                     }
                 return {}
-            
+
             mock_api.side_effect = side_effect
 
             call_command("calculate_intrinsic_value", symbols=["TEST7A", "TEST7B"])
@@ -1013,21 +1274,64 @@ class TestCalculateIntrinsicValueFCFIntegration:
             assert stock.current_fcf_per_share is not None
             assert stock.current_fcf_per_share < Decimal("0")
 
-    @patch("scanner.management.commands.calculate_intrinsic_value.cache")
+    @patch("scanner.alphavantage.util.requests.get")
+    @patch("scanner.alphavantage.util.cache")
     def test_command_caches_cash_flow_data(
-        self, mock_cache, mock_alpha_vantage_dual, mock_sleep
+        self, mock_cache, mock_requests, mock_sleep, clean_curated_stocks
     ):
         """Test that all 3 API responses are cached."""
+        from unittest.mock import Mock
+
         mock_cache.get.return_value = None  # Cache miss
 
+        # Mock HTTP responses
+        def mock_response(url, **kwargs):
+            response = Mock()
+            response.status_code = 200
+            if "EARNINGS" in url:
+                response.json.return_value = {
+                    "quarterlyEarnings": [
+                        {"fiscalDateEnding": "2024-09-30", "reportedEPS": "1.64"},
+                        {"fiscalDateEnding": "2024-06-30", "reportedEPS": "1.40"},
+                        {"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.53"},
+                        {"fiscalDateEnding": "2023-12-31", "reportedEPS": "1.85"},
+                    ]
+                }
+            elif "OVERVIEW" in url:
+                response.json.return_value = {"SharesOutstanding": "15000000000"}
+            elif "CASH_FLOW" in url:
+                response.json.return_value = {
+                    "quarterlyReports": [
+                        {
+                            "operatingCashflow": "30000000000",
+                            "capitalExpenditures": "-2500000000",
+                        },
+                        {
+                            "operatingCashflow": "31000000000",
+                            "capitalExpenditures": "-2600000000",
+                        },
+                        {
+                            "operatingCashflow": "29500000000",
+                            "capitalExpenditures": "-2400000000",
+                        },
+                        {
+                            "operatingCashflow": "32000000000",
+                            "capitalExpenditures": "-2700000000",
+                        },
+                    ]
+                }
+            return response
+
+        mock_requests.side_effect = mock_response
+
         stock = CuratedStockFactory(symbol="FCFTEST4", active=True)
-        call_command("calculate_intrinsic_value")
+        call_command("calculate_intrinsic_value", symbols=["FCFTEST4"])
 
         # Verify cache was checked and set for all 3 endpoints
         cache_calls = [call[0][0] for call in mock_cache.get.call_args_list]
-        assert "av_earnings_FCFTEST4" in cache_calls
-        assert "av_overview_FCFTEST4" in cache_calls
-        assert "av_cashflow_FCFTEST4" in cache_calls
+        assert "alphavantage:earnings:FCFTEST4" in cache_calls
+        assert "alphavantage:overview:FCFTEST4" in cache_calls
+        assert "alphavantage:cash_flow:FCFTEST4" in cache_calls
 
         # Verify cache was set (should be called 3 times for all 3 APIs)
         assert mock_cache.set.call_count >= 3

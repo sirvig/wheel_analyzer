@@ -8,9 +8,8 @@ The caching is done by:
 - cron_scanner command (for scheduled scans)
 """
 
-import json
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

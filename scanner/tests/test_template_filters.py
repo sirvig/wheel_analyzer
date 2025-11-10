@@ -5,7 +5,6 @@ Tests the custom template filters in scanner/templatetags/options_extras.py
 with focus on defensive handling of invalid input types.
 """
 
-import pytest
 from decimal import Decimal
 from scanner.templatetags.options_extras import dict_get, lookup, check_good_options
 
