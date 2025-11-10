@@ -1,12 +1,10 @@
-import json
 import logging
-import os
 import threading
 from datetime import datetime
 
-import redis
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
@@ -38,9 +36,22 @@ def index(request):
 
 @login_required
 def options_list(request, ticker):
-    r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
-    hash_key = f"put_{ticker}"
-    options = json.loads(r.hget(hash_key, "options").decode("utf-8"))
+    """
+    Display options list for a specific ticker using Django cache.
+
+    Args:
+        ticker: Stock symbol to fetch options for
+
+    Returns:
+        Rendered options_list.html template with options data
+    """
+    # Get all ticker options from cache
+    ticker_options = cache.get(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options", default={}
+    )
+
+    # Get options for this specific ticker
+    options = ticker_options.get(ticker, [])
 
     context = {"ticker": ticker, "options": options}
 
@@ -48,13 +59,13 @@ def options_list(request, ticker):
 
 
 def run_scan_in_background():
-    r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
     """
-    Execute the scan in a background thread.
+    Execute the scan in a background thread using Django cache.
 
     This function is responsible for:
     - Running the actual scan
-    - Releasing the Redis lock when complete
+    - Storing results in Django cache
+    - Releasing the scan lock when complete
     - Handling errors and setting appropriate status messages
     """
     try:
@@ -68,63 +79,93 @@ def run_scan_in_background():
         if result["success"]:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             completion_message = f"Scan completed successfully at {timestamp}"
-            r.set("last_run", completion_message)
+
+            # Store scan results in Django cache
+            scan_results = result.get("scan_results", {})
+            ticker_options = {}
+            ticker_scan_times = {}
+
+            for ticker, options in scan_results.items():
+                if options:  # Only store if options found
+                    ticker_options[ticker] = options
+                    ticker_scan_times[ticker] = timestamp
+
+            # Store in cache with 45-minute TTL
+            cache.set(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options",
+                ticker_options,
+                timeout=settings.CACHE_TTL_OPTIONS,
+            )
+
+            cache.set(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times",
+                ticker_scan_times,
+                timeout=settings.CACHE_TTL_OPTIONS,
+            )
+
+            # Update last run status
+            cache.set(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+                completion_message,
+                timeout=settings.CACHE_TTL_OPTIONS,
+            )
+
             logger.info(
                 f"Background scan completed successfully: {result['scanned_count']} tickers"
             )
         else:
             logger.warning(f"Background scan failed: {result['message']}")
             # Set last_run to error message so it displays in the UI
-            r.set("last_run", result["message"])
+            cache.set(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+                result["message"],
+                timeout=settings.CACHE_TTL_OPTIONS,
+            )
 
     except Exception as e:
         logger.error(f"Error during background scan: {e}", exc_info=True)
         # Set last_run to error message
-        r.set("last_run", "An error occurred during the scan. Please check logs.")
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+            "An error occurred during the scan. Please check logs.",
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
 
     finally:
         # Always release the lock
-        r.delete(SCAN_LOCK_KEY)
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:{SCAN_LOCK_KEY}")
         logger.debug("Background scan complete, lock released")
 
 
 def get_scan_results():
     """
-    Helper function to fetch current scan results from Redis.
+    Helper function to fetch current scan results from Django cache.
 
     Returns:
         dict: Context with ticker_options, ticker_scan, last_scan, and curated_stocks
 
     Note:
-        Returns safe defaults (empty dicts) if Redis is unavailable.
-        Logs warnings but does not raise exceptions.
+        Returns safe defaults (empty dicts) if cache is unavailable.
+        Uses Django cache backend instead of direct Redis client.
     """
     try:
-        r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
-        keys = r.keys("put_*")
-        ticker_options = {}
-        ticker_scan = {}
+        # Fetch all ticker options in single cache hit
+        ticker_options = cache.get(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options", default={}
+        )
 
-        for hash_key in keys:
-            ticker = hash_key.decode("utf-8").split("_")[1]
-            options_data = r.hget(hash_key, "options")
-            if options_data:
-                try:
-                    options = json.loads(options_data.decode("utf-8"))
-                    if len(options) > 0:
-                        ticker_options[ticker] = options
-                        last_scan_data = r.hget(hash_key, "last_scan")
-                        if last_scan_data:
-                            ticker_scan[ticker] = last_scan_data.decode("utf-8")
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Failed to decode options JSON for {ticker}: {e}")
-                    continue
+        # Fetch scan timestamps
+        ticker_scan = cache.get(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times", default={}
+        )
 
+        # Fetch last run status
+        last_scan = cache.get(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run", default="Never"
+        )
+
+        # Sort ticker options by ticker symbol
         sorted_ticker_options = {k: ticker_options[k] for k in sorted(ticker_options)}
-
-        # Get last_run status
-        last_run_data = r.get("last_run")
-        last_scan = last_run_data.decode("utf-8") if last_run_data else "Never"
 
         # Fetch CuratedStock instances for all symbols in results
         if sorted_ticker_options:
@@ -152,10 +193,9 @@ def get_scan_results():
             "is_local_environment": settings.ENVIRONMENT == "LOCAL",
         }
 
-    except redis.RedisError as e:
-        logger.warning(
-            f"Redis connection error in get_scan_results: {e}", exc_info=True
-        )
+    except Exception as e:
+        # Catch any cache errors (ConnectionError, TimeoutError, etc.)
+        logger.warning(f"Cache error in get_scan_results: {e}", exc_info=True)
         return {
             "ticker_options": {},
             "ticker_scan": {},
@@ -164,49 +204,34 @@ def get_scan_results():
             "is_local_environment": settings.ENVIRONMENT == "LOCAL",
         }
 
-    except json.JSONDecodeError as e:
-        logger.warning(f"JSON decode error in get_scan_results: {e}", exc_info=True)
-        return {
-            "ticker_options": {},
-            "ticker_scan": {},
-            "last_scan": "Data temporarily unavailable. Please refresh the page.",
-            "curated_stocks": {},
-            "is_local_environment": settings.ENVIRONMENT == "LOCAL",
-        }
-
-    except Exception as e:
-        logger.warning(f"Unexpected error in get_scan_results: {e}", exc_info=True)
-        return {
-            "ticker_options": {},
-            "ticker_scan": {},
-            "last_scan": "Data temporarily unavailable. Please refresh the page.",
-            "curated_stocks": {},
-            "is_local_environment": settings.ENVIRONMENT == "LOCAL",
-        }
-
 
 @login_required
 @require_POST
 def scan_view(request):
-    r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
     """
-    Trigger a manual options scan asynchronously.
+    Trigger a manual options scan asynchronously using Django cache.
 
     Starts a background thread to perform the scan and immediately returns
     a polling partial that will update as results become available.
     """
+    scan_lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:{SCAN_LOCK_KEY}"
+
     # Check if a scan is already in progress
-    if r.exists(SCAN_LOCK_KEY):
+    if cache.get(scan_lock_key):
         logger.info("Scan already in progress, allowing user to watch")
         # Allow user to watch the existing scan by returning polling partial
         context = get_scan_results()
         return render(request, "scanner/partials/scan_polling.html", context)
 
     # Set the lock with a timeout to prevent it from getting stuck
-    r.setex(SCAN_LOCK_KEY, SCAN_LOCK_TIMEOUT, "1")
+    cache.set(scan_lock_key, True, timeout=SCAN_LOCK_TIMEOUT)
 
     # Set initial status before starting scan
-    r.set("last_run", "Scanning in progress...")
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+        "Scanning in progress...",
+        timeout=settings.CACHE_TTL_OPTIONS,
+    )
 
     logger.info("Starting manual scan in background thread")
 
@@ -223,9 +248,8 @@ def scan_view(request):
 
 @login_required
 def scan_status(request):
-    r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
     """
-    Polling endpoint to check scan status and return updated results.
+    Polling endpoint to check scan status and return updated results using Django cache.
 
     This endpoint is called every 15 seconds by the frontend to check if
     the scan is complete and to fetch updated results.
@@ -234,11 +258,13 @@ def scan_status(request):
         - scan_polling.html if scan is still in progress (continues polling)
         - options_results.html if scan is complete (stops polling)
     """
-    # Get current results from Redis
+    # Get current results from cache
     context = get_scan_results()
 
+    scan_lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:{SCAN_LOCK_KEY}"
+
     # Check if scan is still in progress
-    if r.exists(SCAN_LOCK_KEY):
+    if cache.get(scan_lock_key):
         logger.debug("Scan status check: scan in progress")
         # Return polling partial to continue polling
         return render(request, "scanner/partials/scan_polling.html", context)

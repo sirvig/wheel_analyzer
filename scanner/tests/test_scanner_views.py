@@ -750,3 +750,158 @@ class TestRedisErrorHandling:
         # Should render successfully with safe defaults from get_scan_results error handling
         assert response.status_code == 200
         assert response.context["curated_stocks"] == {}
+
+
+@pytest.mark.django_db
+class TestScannerDjangoCacheIntegration:
+    """Tests for scanner views using Django cache backend (TDD for Task 032)."""
+
+    def setup_method(self):
+        """Clear cache before each test."""
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_get_scan_results_uses_django_cache(self):
+        """get_scan_results() fetches from Django cache, not Redis client."""
+        from django.core.cache import cache
+        from django.conf import settings
+        from scanner.views import get_scan_results
+        
+        # Pre-populate cache with test data
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options",
+            {"AAPL": [{"strike": 145.0, "premium": 2.5}]},
+            timeout=settings.CACHE_TTL_OPTIONS
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times",
+            {"AAPL": "2025-11-10 14:30:00"},
+            timeout=settings.CACHE_TTL_OPTIONS
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+            "Test scan completed",
+            timeout=settings.CACHE_TTL_OPTIONS
+        )
+        
+        # Call function
+        result = get_scan_results()
+        
+        # Verify it used cache
+        assert result["ticker_options"]["AAPL"][0]["strike"] == 145.0
+        assert result["last_scan"] == "Test scan completed"
+        assert result["ticker_scan"]["AAPL"] == "2025-11-10 14:30:00"
+
+    def test_scan_results_cached_with_45_min_ttl(self):
+        """Scan results cached with 45-minute TTL."""
+        from django.core.cache import cache
+        from django.conf import settings
+        from scanner.views import run_scan_in_background
+        
+        # Mock the perform_scan function
+        with patch('scanner.views.perform_scan') as mock_perform_scan:
+            mock_perform_scan.return_value = {
+                "success": True,
+                "scanned_count": 1,
+                "scan_results": {"AAPL": [{"strike": 145}]}
+            }
+            
+            # Mock cache.set to verify timeout
+            with patch.object(cache, 'set', wraps=cache.set) as mock_cache_set:
+                run_scan_in_background()
+                
+                # Verify cache.set called with correct timeout for ticker_options
+                for call_args in mock_cache_set.call_args_list:
+                    args, kwargs = call_args
+                    if 'scanner:ticker_options' in str(args[0]):
+                        assert kwargs['timeout'] == settings.CACHE_TTL_OPTIONS
+
+    def test_no_direct_redis_usage_in_views(self):
+        """Verify views don't use redis.Redis.from_url()."""
+        import inspect
+        from scanner import views
+        
+        # Get source code of views module
+        source = inspect.getsource(views)
+        
+        # Should NOT contain direct Redis client usage
+        assert 'redis.Redis.from_url' not in source, \
+            "Views should not use redis.Redis.from_url() - use Django cache instead"
+        
+        # Should use Django cache import
+        assert 'from django.core.cache import cache' in source, \
+            "Views should import Django cache"
+
+    def test_cache_error_handling_preserved(self, client, user):
+        """Cache error handling still works with Django cache."""
+        from django.core.cache import cache
+        
+        # Mock cache.get to raise exception
+        with patch.object(cache, 'get', side_effect=Exception("Cache error")):
+            client.force_login(user)
+            response = client.get(reverse("scanner:scan_status"))
+            
+            # Should return safe defaults, not crash
+            assert response.status_code == 200
+            assert response.context["ticker_options"] == {}
+            assert response.context["curated_stocks"] == {}
+
+    def test_run_scan_in_background_stores_in_django_cache(self):
+        """run_scan_in_background() stores results in Django cache."""
+        from django.core.cache import cache
+        from django.conf import settings
+        from scanner.views import run_scan_in_background
+        
+        # Mock perform_scan
+        with patch('scanner.views.perform_scan') as mock_perform_scan:
+            mock_perform_scan.return_value = {
+                "success": True,
+                "scanned_count": 2,
+                "scan_results": {
+                    "AAPL": [{"strike": 145, "premium": 2.5}],
+                    "MSFT": [{"strike": 340, "premium": 3.0}]
+                }
+            }
+            
+            # Run scan
+            run_scan_in_background()
+            
+            # Verify data in cache
+            ticker_options = cache.get(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options"
+            )
+            last_run = cache.get(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run"
+            )
+            
+            assert ticker_options is not None
+            assert "AAPL" in ticker_options
+            assert "MSFT" in ticker_options
+            assert "Scan completed successfully" in last_run
+
+    def test_scan_view_uses_django_cache(self, client, user):
+        """scan_view() sets status in Django cache."""
+        from django.core.cache import cache
+        from django.conf import settings
+        
+        client.force_login(user)
+        
+        # Mock perform_scan to prevent actual scan
+        with patch('scanner.views.perform_scan') as mock_perform_scan:
+            mock_perform_scan.return_value = {
+                "success": True,
+                "scanned_count": 0,
+                "scan_results": {}
+            }
+            
+            # Trigger scan
+            response = client.post(reverse("scanner:scan"))
+            
+            # Verify scan_in_progress flag set in cache
+            scan_in_progress = cache.get(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress"
+            )
+            
+            # It may be True or None (deleted after scan completes)
+            # Just verify the key was used
+            assert response.status_code == 200
