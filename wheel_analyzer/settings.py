@@ -112,6 +112,30 @@ DATABASES = {
 }
 
 
+# =============================================================================
+# CACHE CONFIGURATION
+# =============================================================================
+
+# Cache TTL (time-to-live) constants
+CACHE_TTL_ALPHAVANTAGE = 7 * 24 * 60 * 60  # 7 days in seconds (604,800)
+CACHE_TTL_OPTIONS = 45 * 60  # 45 minutes in seconds (2,700)
+
+# Django cache backend using Redis
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": env("REDIS_URL"),
+        "TIMEOUT": CACHE_TTL_OPTIONS,  # Default timeout for cache operations
+        "KEY_PREFIX": "wheel_analyzer",  # Namespace all cache keys
+        "VERSION": 1,  # Cache version for invalidation
+    }
+}
+
+# Cache key prefixes for different data types
+CACHE_KEY_PREFIX_ALPHAVANTAGE = "alphavantage"
+CACHE_KEY_PREFIX_SCANNER = "scanner"
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 

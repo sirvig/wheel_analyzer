@@ -69,6 +69,7 @@ import logging
 import time
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -685,7 +686,7 @@ class Command(BaseCommand):
 
     def _fetch_eps_data(self, symbol, force_refresh=False):
         """
-        Fetch EPS data from Alpha Vantage OVERVIEW endpoint with Redis caching.
+        Fetch EPS data from Alpha Vantage OVERVIEW endpoint.
 
         DEPRECATED: This method fetches annual EPS from OVERVIEW.
         New implementation uses _fetch_earnings_data() for quarterly EPS TTM.
@@ -693,125 +694,119 @@ class Command(BaseCommand):
 
         Tracks API calls and cache hits for reporting.
 
-        Cache TTL: 7 days (604800 seconds)
-        Cache key format: av_overview_{symbol}
+        Cache is now handled by get_market_data() in scanner/alphavantage/util.py
+        with standardized cache key format: alphavantage:overview:{symbol}
 
         Args:
             symbol: Stock ticker symbol
-            force_refresh: Bypass cache and fetch fresh data
+            force_refresh: Bypass cache and fetch fresh data (clears cache first)
 
         Returns:
             Dictionary with overview data from Alpha Vantage
         """
-        cache_key = f"av_overview_{symbol}"
+        # If force refresh, clear the cache first
+        if force_refresh:
+            cache_key = f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:overview:{symbol}"
+            cache.delete(cache_key)
+            self.stdout.write("  Clearing cache and fetching fresh data...")
 
-        # Try to get from cache (unless force refresh)
-        if not force_refresh:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                self.cache_hits += 1  # Track cache hit
-                self.stdout.write(self.style.SUCCESS("  Using cached overview data"))
-                logger.debug(f"Overview cache hit for {symbol}")
-                return cached_data
+        # Track whether we're using cache (check before API call)
+        cache_key = f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:overview:{symbol}"
+        cached_before = cache.get(cache_key) is not None
 
-        # Fetch from API
-        self.api_calls_made += 1  # Track API call
-        self.stdout.write("  Fetching overview from Alpha Vantage API...")
-        logger.debug(f"Overview cache miss for {symbol}, fetching from API")
-
+        # Fetch from API (cache is handled internally by get_market_data)
         url = f"function=OVERVIEW&symbol={symbol}"
         overview_data = get_market_data(url)
 
-        # Cache the response
-        if overview_data:
-            cache.set(cache_key, overview_data, CACHE_TTL)
-            logger.debug(f"Cached overview data for {symbol} (TTL: {CACHE_TTL}s)")
+        # Track API call vs cache hit for reporting
+        if cached_before and not force_refresh:
+            self.cache_hits += 1
+            self.stdout.write(self.style.SUCCESS("  Using cached overview data"))
+        else:
+            self.api_calls_made += 1
+            self.stdout.write("  Fetching overview from Alpha Vantage API...")
 
         return overview_data
 
     def _fetch_earnings_data(self, symbol, force_refresh=False):
         """
-        Fetch quarterly earnings data from Alpha Vantage EARNINGS endpoint with Redis caching.
+        Fetch quarterly earnings data from Alpha Vantage EARNINGS endpoint.
 
         This is used to calculate EPS TTM (sum of 4 most recent quarterly reportedEPS).
 
         Tracks API calls and cache hits for reporting.
 
-        Cache TTL: 7 days (604800 seconds)
-        Cache key format: av_earnings_{symbol}
+        Cache is now handled by get_market_data() in scanner/alphavantage/util.py
+        with standardized cache key format: alphavantage:earnings:{symbol}
 
         Args:
             symbol: Stock ticker symbol
-            force_refresh: Bypass cache and fetch fresh data
+            force_refresh: Bypass cache and fetch fresh data (clears cache first)
 
         Returns:
             Dictionary with earnings data from Alpha Vantage
         """
-        cache_key = f"av_earnings_{symbol}"
+        # If force refresh, clear the cache first
+        if force_refresh:
+            cache_key = f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:earnings:{symbol}"
+            cache.delete(cache_key)
+            self.stdout.write("  Clearing cache and fetching fresh data...")
 
-        # Try to get from cache (unless force refresh)
-        if not force_refresh:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                self.cache_hits += 1  # Track cache hit
-                self.stdout.write(self.style.SUCCESS("  Using cached earnings data"))
-                logger.debug(f"Earnings cache hit for {symbol}")
-                return cached_data
+        # Track whether we're using cache (check before API call)
+        cache_key = f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:earnings:{symbol}"
+        cached_before = cache.get(cache_key) is not None
 
-        # Fetch from API
-        self.api_calls_made += 1  # Track API call
-        self.stdout.write("  Fetching earnings from Alpha Vantage API...")
-        logger.debug(f"Earnings cache miss for {symbol}, fetching from API")
-
+        # Fetch from API (cache is handled internally by get_market_data)
         url = f"function=EARNINGS&symbol={symbol}"
         earnings_data = get_market_data(url)
 
-        # Cache the response
-        if earnings_data:
-            cache.set(cache_key, earnings_data, CACHE_TTL)
-            logger.debug(f"Cached earnings data for {symbol} (TTL: {CACHE_TTL}s)")
+        # Track API call vs cache hit for reporting
+        if cached_before and not force_refresh:
+            self.cache_hits += 1
+            self.stdout.write(self.style.SUCCESS("  Using cached earnings data"))
+        else:
+            self.api_calls_made += 1
+            self.stdout.write("  Fetching earnings from Alpha Vantage API...")
 
         return earnings_data
 
     def _fetch_cash_flow_data(self, symbol, force_refresh=False):
         """
-        Fetch cash flow data from Alpha Vantage with Redis caching.
+        Fetch cash flow data from Alpha Vantage.
 
         Tracks API calls and cache hits for reporting.
 
-        Cache TTL: 7 days (same as OVERVIEW)
-        Cache key format: av_cashflow_{symbol}
+        Cache is now handled by get_market_data() in scanner/alphavantage/util.py
+        with standardized cache key format: alphavantage:cash_flow:{symbol}
 
         Args:
             symbol: Stock ticker symbol
-            force_refresh: Bypass cache and fetch fresh data
+            force_refresh: Bypass cache and fetch fresh data (clears cache first)
 
         Returns:
             Dictionary with cash flow data from Alpha Vantage
         """
-        cache_key = f"av_cashflow_{symbol}"
+        # If force refresh, clear the cache first
+        if force_refresh:
+            cache_key = f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:cash_flow:{symbol}"
+            cache.delete(cache_key)
+            self.stdout.write("  Clearing cache and fetching fresh data...")
 
-        # Try to get from cache (unless force refresh)
-        if not force_refresh:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                self.cache_hits += 1  # Track cache hit
-                self.stdout.write(self.style.SUCCESS("  Using cached cash flow data"))
-                logger.debug(f"Cash flow cache hit for {symbol}")
-                return cached_data
+        # Track whether we're using cache (check before API call)
+        cache_key = f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:cash_flow:{symbol}"
+        cached_before = cache.get(cache_key) is not None
 
-        # Fetch from API
-        self.api_calls_made += 1  # Track API call
-        self.stdout.write("  Fetching cash flow from Alpha Vantage API...")
-        logger.debug(f"Cash flow cache miss for {symbol}, fetching from API")
-
+        # Fetch from API (cache is handled internally by get_market_data)
         url = f"function=CASH_FLOW&symbol={symbol}"
         cash_flow_data = get_market_data(url)
 
-        # Cache the response
-        if cash_flow_data:
-            cache.set(cache_key, cash_flow_data, CACHE_TTL)
-            logger.debug(f"Cached cash flow data for {symbol} (TTL: {CACHE_TTL}s)")
+        # Track API call vs cache hit for reporting
+        if cached_before and not force_refresh:
+            self.cache_hits += 1
+            self.stdout.write(self.style.SUCCESS("  Using cached cash flow data"))
+        else:
+            self.api_calls_made += 1
+            self.stdout.write("  Fetching cash flow from Alpha Vantage API...")
 
         return cash_flow_data
 
@@ -948,21 +943,36 @@ class Command(BaseCommand):
         time.sleep(RATE_LIMIT_DELAY)
 
     def _clear_alpha_vantage_cache(self):
-        """Clear all cached Alpha Vantage data (EARNINGS, OVERVIEW, and CASH_FLOW)."""
+        """
+        Clear all cached Alpha Vantage data (EARNINGS, OVERVIEW, and CASH_FLOW).
+
+        Uses new standardized cache key format: alphavantage:{function}:{symbol}
+        """
         # Get all curated stocks to clear their cache
         symbols = CuratedStock.objects.values_list("symbol", flat=True)
 
         cleared = 0
         for symbol in symbols:
-            # Clear EARNINGS cache
-            if cache.delete(f"av_earnings_{symbol}"):
+            # Clear EARNINGS cache (new format)
+            if cache.delete(
+                f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:earnings:{symbol}"
+            ):
                 cleared += 1
-            # Clear OVERVIEW cache
-            if cache.delete(f"av_overview_{symbol}"):
+            # Clear OVERVIEW cache (new format)
+            if cache.delete(
+                f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:overview:{symbol}"
+            ):
                 cleared += 1
-            # Clear CASH_FLOW cache
-            if cache.delete(f"av_cashflow_{symbol}"):
+            # Clear CASH_FLOW cache (new format)
+            if cache.delete(
+                f"{settings.CACHE_KEY_PREFIX_ALPHAVANTAGE}:cash_flow:{symbol}"
+            ):
                 cleared += 1
+
+            # Also clear old format keys for backward compatibility (can be removed later)
+            cache.delete(f"av_earnings_{symbol}")
+            cache.delete(f"av_overview_{symbol}")
+            cache.delete(f"av_cashflow_{symbol}")
 
         self.stdout.write(self.style.SUCCESS(f"Cleared {cleared} cached entries"))
         logger.info(f"Cleared {cleared} Alpha Vantage cache entries")
