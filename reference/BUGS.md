@@ -1,6 +1,7 @@
 # Bugs
 
 Pending:
+- The calculate_intrinsic_value command does not actually cache the API return into redis.  It looks like we are using Django cache but are not actually defining the Redis cache in settings.  The redis URL and password are stored in the .env file.  Ensure that testing is properly testing redis cache
 
 Completed:
 - ✅ When navigating to /scanner/ after a scan has already been run, Good/Bad pills were not displaying correctly

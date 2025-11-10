@@ -230,18 +230,16 @@ class TestIndexView:
         """Test that index view always returns dict for curated_stocks, preventing template errors."""
         client.force_login(user)
 
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
-            mock_redis = mock_redis_from_url.return_value
-            mock_redis.keys.return_value = []
-            mock_redis.get.return_value = b"Never"
+        # Set up cache with no options
+        setup_scanner_cache()
 
-            response = client.get("/scanner/")
+        response = client.get("/scanner/")
 
-            assert response.status_code == 200
-            # This is the key assertion - curated_stocks must be a dict
-            assert isinstance(response.context["curated_stocks"], dict)
-            # Should be empty when no options data exists
-            assert response.context["curated_stocks"] == {}
+        assert response.status_code == 200
+        # This is the key assertion - curated_stocks must be a dict
+        assert isinstance(response.context["curated_stocks"], dict)
+        # Should be empty when no options data exists
+        assert response.context["curated_stocks"] == {}
 
 
 @pytest.mark.django_db
@@ -255,18 +253,16 @@ class TestScanView:
         assert response.status_code == 405  # Method Not Allowed
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_scan_view_prevents_concurrent_scans(
-        self, mock_redis, mock_perform_scan, client, user
-    ):
-        """Test that scan view prevents concurrent scans using Redis lock."""
+    def test_scan_view_prevents_concurrent_scans(self, mock_perform_scan, client, user):
+        """Test that scan view prevents concurrent scans using cache lock."""
         client.force_login(user)
-        # Setup mock redis instance
-        mock_r = mock_redis.return_value
-        # Simulate existing lock
-        mock_r.exists.return_value = True
-        mock_r.keys.return_value = []
-        mock_r.get.return_value = b"Scanning in progress..."
+
+        # Set existing scan lock in cache
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress", True, timeout=600
+        )
+        # Set up cache data
+        setup_scanner_cache(last_run="Scanning in progress...")
 
         response = client.post(reverse("scanner:scan"))
 
@@ -276,26 +272,14 @@ class TestScanView:
         mock_perform_scan.assert_not_called()
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_scan_view_successful_scan(
-        self, mock_redis_from_url, mock_perform_scan, client, user
-    ):
+    def test_scan_view_successful_scan(self, mock_perform_scan, client, user):
         """Test successful scan execution."""
         client.force_login(user)
-        mock_redis = mock_redis_from_url.return_value
-        # Mock Redis lock (no existing lock)
-        mock_redis.exists.return_value = False
-        mock_redis.keys.return_value = [b"put_AAPL"]
 
-        # Mock successful scan result
-        mock_perform_scan.return_value = {
-            "success": True,
-            "message": "Scan completed successfully",
-            "scanned_count": 26,
-            "timestamp": "2024-11-03 10:30",
-        }
+        # No existing scan lock
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress")
 
-        # Mock options data for response
+        # Mock successful scan result with scan_results
         aapl_options = [
             {
                 "date": "2024-12-20",
@@ -306,45 +290,46 @@ class TestScanView:
             }
         ]
 
-        def mock_hget(key, field):
-            if key == b"put_AAPL":
-                if field == "options":
-                    return json.dumps(aapl_options).encode()
-                elif field == "last_scan":
-                    return b"2024-11-03 10:30"
-            return None
-
-        mock_redis.hget.side_effect = mock_hget
+        mock_perform_scan.return_value = {
+            "success": True,
+            "message": "Scan completed successfully",
+            "scanned_count": 1,
+            "scan_results": {"AAPL": aapl_options},
+        }
 
         response = client.post(reverse("scanner:scan"))
 
         assert response.status_code == 200
         # Verify perform_scan was called
         mock_perform_scan.assert_called_once_with(debug=False)
-        # Verify lock was set and released
-        mock_redis.setex.assert_called_once_with("scan_in_progress", 600, "1")
-        mock_redis.delete.assert_called_once_with("scan_in_progress")
+
+        # Verify data was stored in cache (wait for background thread to complete)
+        import time
+
+        ticker_options = None
+        for _ in range(10):  # Try for up to 1 second
+            ticker_options = cache.get(
+                f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options"
+            )
+            if ticker_options is not None:
+                break
+            time.sleep(0.1)
+        assert ticker_options is not None
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_scan_view_handles_market_closed(
-        self, mock_redis, mock_perform_scan, client, user
-    ):
+    def test_scan_view_handles_market_closed(self, mock_perform_scan, client, user):
         """Test scan view handles market closed scenario."""
         client.force_login(user)
-        # Setup mock redis instance
-        mock_r = mock_redis.return_value
-        # Mock Redis lock (no existing lock)
-        mock_r.exists.return_value = False
-        mock_r.keys.return_value = []
-        mock_r.get.return_value = b"2024-11-03 20:00"
+
+        # No existing scan lock
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress")
+        setup_scanner_cache(last_run="2024-11-03 20:00")
 
         # Mock market closed result
         mock_perform_scan.return_value = {
             "success": False,
             "message": "Market is closed. Scans only run during market hours (9:30 AM - 4:00 PM ET).",
             "scanned_count": 0,
-            "timestamp": "2024-11-03 20:00",
         }
 
         response = client.post(reverse("scanner:scan"))
@@ -354,24 +339,19 @@ class TestScanView:
         assert b"Scan in progress" in response.content
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_scan_view_handles_errors(
-        self, mock_redis_from_url, mock_perform_scan, client, user
-    ):
+    def test_scan_view_handles_errors(self, mock_perform_scan, client, user):
         """Test scan view handles errors gracefully."""
         client.force_login(user)
-        mock_redis = mock_redis_from_url.return_value
-        # Mock Redis lock (no existing lock)
-        mock_redis.exists.return_value = False
-        mock_redis.keys.return_value = []
-        mock_redis.get.return_value = b"2024-11-03 10:30"
+
+        # No existing scan lock
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress")
+        setup_scanner_cache(last_run="2024-11-03 10:30")
 
         # Mock error result
         mock_perform_scan.return_value = {
             "success": False,
             "message": "An error occurred during the scan. Please check logs for details.",
             "scanned_count": 0,
-            "timestamp": "2024-11-03 10:30",
             "error": "Connection timeout",
         }
 
@@ -384,18 +364,15 @@ class TestScanView:
         # Lock release happens in background thread, not testable in sync test
 
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_releases_lock_on_exception(
-        self, mock_redis, mock_perform_scan, client, user
+        self, mock_perform_scan, client, user
     ):
         """Test that scan view releases lock even when exception occurs."""
         client.force_login(user)
-        # Mock Redis lock (no existing lock)
-        # Setup mock redis instance
-        mock_r = mock_redis.return_value
-        mock_r.exists.return_value = False
-        mock_r.keys.return_value = []
-        mock_r.get.return_value = b"2024-11-03 10:30"
+
+        # No existing scan lock
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress")
+        setup_scanner_cache(last_run="2024-11-03 10:30")
 
         # Mock exception during scan
         mock_perform_scan.side_effect = Exception("Unexpected error")
@@ -410,18 +387,15 @@ class TestScanView:
 
     @patch("scanner.views.settings")
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_bypasses_market_hours_in_local_environment(
-        self, mock_redis, mock_perform_scan, mock_settings, client, user
+        self, mock_perform_scan, mock_settings, client, user
     ):
         """Test that scan view bypasses market hours check in LOCAL environment."""
         client.force_login(user)
-        # Mock Redis lock (no existing lock)
-        # Setup mock redis instance
-        mock_r = mock_redis.return_value
-        mock_r.exists.return_value = False
-        mock_r.keys.return_value = []
-        mock_r.get.return_value = b"2024-11-03 22:00"
+
+        # No existing scan lock
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress")
+        setup_scanner_cache(last_run="2024-11-03 22:00")
 
         # Set ENVIRONMENT to LOCAL
         mock_settings.ENVIRONMENT = "LOCAL"
@@ -431,7 +405,7 @@ class TestScanView:
             "success": True,
             "message": "Scan completed successfully",
             "scanned_count": 5,
-            "timestamp": "2024-11-03 22:00",  # Outside market hours
+            "scan_results": {},
         }
 
         response = client.post(reverse("scanner:scan"))
@@ -443,15 +417,15 @@ class TestScanView:
 
     @patch("scanner.views.settings")
     @patch("scanner.views.perform_scan")
-    @patch("scanner.views.redis.Redis.from_url")
     def test_scan_view_enforces_market_hours_in_production_environment(
-        self, mock_redis, mock_perform_scan, mock_settings, client, user
+        self, mock_perform_scan, mock_settings, client, user
     ):
         """Test that scan view enforces market hours check in PRODUCTION environment."""
         client.force_login(user)
-        # Mock Redis lock (no existing lock)
-        mock_redis.exists.return_value = False
-        mock_redis.keys.return_value = []
+
+        # No existing scan lock
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress")
+        setup_scanner_cache()
 
         # Set ENVIRONMENT to PRODUCTION
         mock_settings.ENVIRONMENT = "PRODUCTION"
@@ -461,7 +435,6 @@ class TestScanView:
             "success": False,
             "message": "Market is closed. Scans only run during market hours (9:30 AM - 4:00 PM ET).",
             "scanned_count": 0,
-            "timestamp": "2024-11-03 22:00",
         }
 
         response = client.post(reverse("scanner:scan"))
@@ -479,40 +452,33 @@ class TestOptionsListView:
     def test_options_list_view_renders_for_ticker(self, client, user):
         """Test that options list view renders for a specific ticker."""
         client.force_login(user)
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
-            # Setup mock redis instance
-            mock_redis = mock_redis_from_url.return_value
 
-            # Mock Redis responses
-            aapl_options = [
-                {
-                    "date": "2024-12-20",
-                    "strike": 180.0,
-                    "price": 2.50,
-                    "delta": -0.15,
-                    "annualized": 35.5,
-                }
-            ]
+        # Set up cache with AAPL options
+        aapl_options = [
+            {
+                "date": "2024-12-20",
+                "strike": 180.0,
+                "price": 2.50,
+                "delta": -0.15,
+                "annualized": 35.5,
+            }
+        ]
 
-            def mock_hget(key, field):
-                if key == "put_AAPL" and field == "options":
-                    return json.dumps(aapl_options).encode()
-                elif key == "put_AAPL" and field == "last_scan":
-                    return b"2024-11-03 10:30"
-                return None
+        setup_scanner_cache(
+            ticker_options={"AAPL": aapl_options},
+            ticker_scan_times={"AAPL": "2024-11-03 10:30"},
+        )
 
-            mock_redis.hget.side_effect = mock_hget
+        response = client.get(
+            reverse("scanner:options_list", kwargs={"ticker": "AAPL"})
+        )
 
-            response = client.get(
-                reverse("scanner:options_list", kwargs={"ticker": "AAPL"})
-            )
-
-            assert response.status_code == 200
-            assert "ticker" in response.context
-            assert response.context["ticker"] == "AAPL"
-            assert "options" in response.context
-            assert len(response.context["options"]) == 1
-            assert response.context["options"][0]["strike"] == 180.0
+        assert response.status_code == 200
+        assert "ticker" in response.context
+        assert response.context["ticker"] == "AAPL"
+        assert "options" in response.context
+        assert len(response.context["options"]) == 1
+        assert response.context["options"][0]["strike"] == 180.0
 
 
 # Valuation List View Tests
@@ -647,67 +613,55 @@ class TestValuationListView:
 
 @pytest.mark.django_db
 class TestRedisErrorHandling:
-    """Tests for Redis error handling in scanner views."""
+    """Tests for cache error handling in scanner views."""
 
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_get_scan_results_redis_connection_error(self, mock_redis_from_url):
-        """get_scan_results returns safe defaults on Redis connection error."""
+    def test_get_scan_results_redis_connection_error(self):
+        """get_scan_results returns safe defaults on cache connection error."""
         from scanner.views import get_scan_results
-        import redis as redis_module
 
-        # Mock Redis connection failure
-        mock_redis_from_url.side_effect = redis_module.ConnectionError(
-            "Connection refused"
-        )
+        # Mock cache.get to raise exception
+        with patch.object(cache, "get", side_effect=Exception("Connection refused")):
+            result = get_scan_results()
+
+            # Should return safe defaults
+            assert result["ticker_options"] == {}
+            assert result["ticker_scan"] == {}
+            assert result["curated_stocks"] == {}
+            assert "Data temporarily unavailable" in result["last_scan"]
+            assert isinstance(result["curated_stocks"], dict)
+
+    def test_get_scan_results_redis_timeout(self):
+        """get_scan_results returns safe defaults on cache timeout."""
+        from scanner.views import get_scan_results
+
+        # Mock cache timeout
+        with patch.object(cache, "get", side_effect=TimeoutError("Timeout")):
+            result = get_scan_results()
+
+            # Should return safe defaults
+            assert result["curated_stocks"] == {}
+            assert isinstance(result["curated_stocks"], dict)
+
+    def test_get_scan_results_json_decode_error(self):
+        """get_scan_results handles cache errors gracefully (no JSON decoding with Django cache)."""
+        from scanner.views import get_scan_results
+
+        # With Django cache, we don't have JSON decoding issues
+        # Test that empty cache returns safe defaults
+        cache.clear()
 
         result = get_scan_results()
 
-        # Should return safe defaults
-        assert result["ticker_options"] == {}
-        assert result["ticker_scan"] == {}
-        assert result["curated_stocks"] == {}
-        assert "Data temporarily unavailable" in result["last_scan"]
+        # Should handle gracefully
         assert isinstance(result["curated_stocks"], dict)
+        assert result["ticker_options"] == {}  # Empty when cache is empty
 
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_get_scan_results_redis_timeout(self, mock_redis_from_url):
-        """get_scan_results returns safe defaults on Redis timeout."""
-        from scanner.views import get_scan_results
-        import redis as redis_module
-
-        # Mock Redis timeout
-        mock_redis_from_url.side_effect = redis_module.TimeoutError("Timeout")
-
-        result = get_scan_results()
-
-        # Should return safe defaults
-        assert result["curated_stocks"] == {}
-        assert isinstance(result["curated_stocks"], dict)
-
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_get_scan_results_json_decode_error(self, mock_redis_from_url):
-        """get_scan_results handles malformed JSON gracefully."""
+    def test_get_scan_results_none_hget_response(self):
+        """get_scan_results handles empty cache gracefully."""
         from scanner.views import get_scan_results
 
-        mock_redis = mock_redis_from_url.return_value
-        mock_redis.keys.return_value = [b"put_AAPL"]
-        mock_redis.hget.return_value = b"invalid json{"
-        mock_redis.get.return_value = b"Never"
-
-        result = get_scan_results()
-
-        # Should handle gracefully - ticker won't be in results due to JSON error
-        assert isinstance(result["curated_stocks"], dict)
-
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_get_scan_results_none_hget_response(self, mock_redis_from_url):
-        """get_scan_results handles None response from hget."""
-        from scanner.views import get_scan_results
-
-        mock_redis = mock_redis_from_url.return_value
-        mock_redis.keys.return_value = [b"put_AAPL"]
-        mock_redis.hget.return_value = None  # Key doesn't exist or expired
-        mock_redis.get.return_value = b"Never"
+        # Clear cache (simulates expired/missing data)
+        cache.clear()
 
         result = get_scan_results()
 
@@ -715,38 +669,36 @@ class TestRedisErrorHandling:
         assert result["ticker_options"] == {}
         assert isinstance(result["curated_stocks"], dict)
 
-    @patch("scanner.views.redis.Redis.from_url")
+    @patch("scanner.views.cache.get")
     def test_get_scan_results_always_returns_dict_for_curated_stocks(
-        self, mock_redis_from_url
+        self, mock_cache_get
     ):
         """get_scan_results always returns dict for curated_stocks, never None or string."""
         from scanner.views import get_scan_results
-        import redis as redis_module
 
         # Test with various error conditions
         test_cases = [
-            redis_module.ConnectionError("Connection failed"),
-            redis_module.TimeoutError("Timeout"),
-            Exception("Unexpected error"),
+            Exception("Connection failed"),
+            TimeoutError("Timeout"),
+            RuntimeError("Unexpected error"),
         ]
 
         for error in test_cases:
-            mock_redis_from_url.side_effect = error
+            mock_cache_get.side_effect = error
 
             result = get_scan_results()
 
             assert isinstance(result["curated_stocks"], dict)
             assert result["curated_stocks"] == {}
 
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_index_view_redis_connection_error(self, mock_redis_from_url, client, user):
-        """index view handles Redis connection error gracefully."""
-        import redis as redis_module
+            # Reset for next iteration
+            mock_cache_get.side_effect = None
 
-        # Mock Redis connection failure
-        mock_redis_from_url.side_effect = redis_module.ConnectionError(
-            "Connection refused"
-        )
+    @patch("scanner.views.cache.get")
+    def test_index_view_cache_error(self, mock_cache_get, client, user):
+        """index view handles cache errors gracefully."""
+        # Mock cache failure
+        mock_cache_get.side_effect = Exception("Cache unavailable")
 
         client.force_login(user)
         response = client.get("/scanner/")
@@ -755,29 +707,21 @@ class TestRedisErrorHandling:
         assert response.status_code == 200
         assert "Data temporarily unavailable" in response.context["last_scan"]
 
-    @patch("scanner.views.redis.Redis.from_url")
-    def test_scan_status_view_redis_error(self, mock_redis_from_url, client, user):
-        """scan_status view handles Redis errors via get_scan_results."""
-        import redis as redis_module
+    @patch("scanner.views.cache.get")
+    def test_scan_status_view_cache_error(self, mock_cache_get, client, user):
+        """scan_status view handles cache errors via get_scan_results."""
+        from django.conf import settings
 
-        # Setup mock redis instance for scan_status view
-        mock_redis = mock_redis_from_url.return_value
-        mock_redis.exists.return_value = False  # No scan in progress
+        # Create a side effect that only fails for ticker_options/curated_stocks keys
+        # but returns False for scan_lock_key (so scan is not in progress)
+        def cache_get_side_effect(key, **kwargs):
+            if "ticker_options" in key or "curated_stocks" in key:
+                raise Exception("Cache unavailable")
+            elif f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_lock" in key:
+                return False  # No scan in progress
+            return None
 
-        # Make get_scan_results fail by having the second call to from_url raise error
-        # First call (scan_status line 226) succeeds, second call (get_scan_results line 103) fails
-        call_count = [0]
-
-        def side_effect_fn(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return mock_redis  # First call succeeds
-            else:
-                raise redis_module.ConnectionError(
-                    "Connection refused"
-                )  # Second call fails
-
-        mock_redis_from_url.side_effect = side_effect_fn
+        mock_cache_get.side_effect = cache_get_side_effect
 
         client.force_login(user)
         response = client.get(reverse("scanner:scan_status"))
@@ -873,9 +817,18 @@ class TestScannerDjangoCacheIntegration:
     def test_cache_error_handling_preserved(self, client, user):
         """Cache error handling still works with Django cache."""
         from django.core.cache import cache
+        from django.conf import settings
 
-        # Mock cache.get to raise exception
-        with patch.object(cache, "get", side_effect=Exception("Cache error")):
+        # Create a conditional side effect that only fails for data keys
+        # but returns False for scan_lock_key (so scan is not in progress)
+        def cache_get_side_effect(key, **kwargs):
+            if "ticker_options" in key or "curated_stocks" in key:
+                raise Exception("Cache error")
+            elif f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_lock" in key:
+                return False  # No scan in progress
+            return None
+
+        with patch.object(cache, "get", side_effect=cache_get_side_effect):
             client.force_login(user)
             response = client.get(reverse("scanner:scan_status"))
 
