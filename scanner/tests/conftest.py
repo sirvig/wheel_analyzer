@@ -1,5 +1,9 @@
+import sys
+
+import django
 import pytest
 from django.core.cache import cache
+from django.core.management.base import OutputWrapper
 
 from scanner.factories import OptionsWatchFactory
 from scanner.models import CuratedStock
@@ -32,3 +36,19 @@ def clear_cache():
     cache.clear()
     yield
     cache.clear()
+
+
+if django.VERSION < (5, 2):
+    orig_unraisablehook = sys.unraisablehook
+
+    def unraisablehook(unraisable):
+        if (
+            unraisable.exc_type is ValueError
+            and unraisable.exc_value is not None
+            and unraisable.exc_value.args == ("I/O operation on closed file.",)
+            and isinstance(unraisable.object, OutputWrapper)
+        ):
+            return
+        orig_unraisablehook(unraisable)
+
+    sys.unraisablehook = unraisablehook
