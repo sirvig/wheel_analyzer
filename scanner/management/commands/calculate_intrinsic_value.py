@@ -18,7 +18,7 @@ The command makes 3 API calls per stock:
 - OVERVIEW: to fetch SharesOutstanding (needed for FCF calculation)
 - CASH_FLOW: to calculate FCF TTM from quarterly data
 
-All API responses are cached in Redis for 7 days to minimize API usage.
+All API responses are cached in Django cache for 7 days to minimize API usage.
 
 Usage:
     # Default: smart select 7 stocks (21 API calls)

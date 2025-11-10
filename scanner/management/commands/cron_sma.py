@@ -1,7 +1,5 @@
 import logging
-import os
 
-import redis
 from django.core.management.base import BaseCommand
 
 from scanner.alphavantage.technical_analysis import find_sma
@@ -10,11 +8,9 @@ from scanner.models import CuratedStock
 logger = logging.getLogger(__name__)
 DEBUG = False
 
-TTL = 15 * 60  # 15 minutes
-
 
 class Command(BaseCommand):
-    help = "Scan options"
+    help = "Calculate and cache SMA data for curated stocks"
 
     def add_arguments(self, parser):
         # Positional arguments
@@ -22,42 +18,34 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         DEBUG = options["debug"]
-        r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
 
         # Get active stocks from database
         tickers = CuratedStock.objects.filter(active=True).values_list(
             "symbol", flat=True
         )
 
+        success_count = 0
         for ticker in tickers:
             logger.debug(f"Finding SMA for {ticker}")
-            fifty_day_sma = find_sma(ticker, 50)
-            two_hundred_day_sma = find_sma(ticker, 200)
+            try:
+                # Call find_sma which uses get_market_data with Django cache
+                # Data is automatically cached for 7 days (CACHE_TTL_ALPHAVANTAGE)
+                fifty_day_sma = find_sma(ticker, 50)
+                two_hundred_day_sma = find_sma(ticker, 200)
 
-            # Example data
-            # {
-            #     "Meta Data": {
-            #         "1: Symbol": "ALB",
-            #         "2: Indicator": "Simple Moving Average (SMA)",
-            #         "3: Last Refreshed": "2024-12-13",
-            #         "4: Interval": "daily",
-            #         "5: Time Period": 200,
-            #         "6: Series Type": "open",
-            #         "7: Time Zone": "US/Eastern"
-            #     },
-            #     "Technical Analysis: SMA": {
-            #         "2024-12-13": {
-            #             "SMA": "104.3637"
-            #         },
-            #         "2024-12-12": {
-            #             "SMA": "104.5257"
-            #         },
-            #         "2024-12-11": {
-            #             "SMA": "104.6527"
-            #         },
+                if fifty_day_sma or two_hundred_day_sma:
+                    success_count += 1
+                    self.stdout.write(
+                        self.style.SUCCESS(f"✓ Cached SMA data for {ticker}")
+                    )
+            except Exception as e:
+                self.stdout.write(
+                    self.style.WARNING(f"✗ Failed to cache SMA for {ticker}: {e}")
+                )
+                logger.exception(f"Error caching SMA for {ticker}")
 
-            # Get the last refreshed date
-            # Look for the SMA for that date
-
-            # hash_key = f"sma_{ticker}"
-            # r.hset(hash_key, "sma", json.dumps(sma_data))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"\nSMA caching complete: {success_count}/{len(tickers)} tickers"
+            )
+        )

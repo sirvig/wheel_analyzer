@@ -1,11 +1,7 @@
 """Core scanner functionality for finding options."""
 
-import json
 import logging
-import os
 from datetime import datetime
-
-import redis
 
 from scanner.marketdata.options import find_options
 from scanner.marketdata.util import is_market_open
@@ -13,12 +9,13 @@ from scanner.models import CuratedStock
 
 logger = logging.getLogger(__name__)
 
-TTL = 30 * 60  # 30 minutes
-
 
 def perform_scan(debug=False):
     """
     Perform an options scan for all active curated stocks.
+
+    This function scans for put options and returns the results. The caller
+    is responsible for caching the results using Django cache.
 
     Args:
         debug: If True, skip market hours check and enable debug logging
@@ -29,10 +26,9 @@ def perform_scan(debug=False):
             - message (str): Status message
             - scanned_count (int): Number of tickers scanned
             - timestamp (str): Completion timestamp
+            - scan_results (dict): Dictionary of {ticker: options_list} if successful
     """
     try:
-        r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
-
         # Get active stocks from database
         tickers = list(
             CuratedStock.objects.filter(active=True).values_list("symbol", flat=True)
@@ -47,36 +43,26 @@ def perform_scan(debug=False):
                 "message": "Market is closed. Scans only run during market hours (9:30 AM - 4:00 PM ET).",
                 "scanned_count": 0,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "scan_results": {},
             }
 
         # Find puts
         contract_type = "put"
         total_tickers = len(tickers)
-        counter = 0
+        scan_results = {}
 
         logger.info(f"Starting scan of {total_tickers} tickers")
 
         for ticker in tickers:
             logger.debug(f"Finding options for {ticker}")
 
-            # Calculate the percentage of the loop remaining
-            counter += 1
-            percentage_completed = (counter / total_tickers) * 100
-            r.set(
-                "last_run", f"Currently Running - {percentage_completed:.2f}% completed"
-            )
-
             options = find_options(ticker, contract_type)
-            hash_key = f"{contract_type}_{ticker}"
-            r.hset(hash_key, "options", json.dumps(options))
-            now = datetime.now()
-            r.hset(hash_key, "last_scan", now.strftime("%Y-%m-%d %H:%M"))
-            r.expire(hash_key, TTL)
+            if options:
+                scan_results[ticker] = options
 
         # Last scan timestamp
         now = datetime.now()
         timestamp = now.strftime("%Y-%m-%d %H:%M")
-        r.set("last_run", timestamp)
 
         logger.info(f"Scan completed successfully. Scanned {total_tickers} tickers")
 
@@ -85,6 +71,7 @@ def perform_scan(debug=False):
             "message": f"Scan completed successfully at {timestamp}",
             "scanned_count": total_tickers,
             "timestamp": timestamp,
+            "scan_results": scan_results,
         }
 
     except Exception as e:
@@ -95,4 +82,5 @@ def perform_scan(debug=False):
             "scanned_count": 0,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "error": str(e),
+            "scan_results": {},
         }
