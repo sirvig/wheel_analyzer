@@ -29,62 +29,11 @@ def index(request):
 
     Note:
         Returns safe defaults if Redis is unavailable.
+        Uses get_scan_results() helper for consistent context across views.
     """
-    try:
-        r = redis.Redis.from_url(os.environ.get("REDIS_URL"))
-        keys = r.keys("put_*")
-
-        context = {}
-        ticker_options = {}
-        ticker_scan = {}
-
-        for hash_key in keys:
-            ticker = hash_key.decode("utf-8").split("_")[1]
-
-            # Defensive: handle None return from hget
-            options_data = r.hget(hash_key, "options")
-            if options_data:
-                try:
-                    options = json.loads(options_data.decode("utf-8"))
-                    if len(options) > 0:
-                        ticker_options[ticker] = options
-
-                        last_scan_data = r.hget(hash_key, "last_scan")
-                        if last_scan_data:
-                            ticker_scan[ticker] = last_scan_data.decode("utf-8")
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Failed to decode options JSON for {ticker}: {e}")
-                    continue
-
-        sorted_ticker_options = {k: ticker_options[k] for k in sorted(ticker_options)}
-        context["ticker_options"] = sorted_ticker_options
-        context["ticker_scan"] = ticker_scan
-
-        # Defensive: handle None return from get
-        last_run_data = r.get("last_run")
-        context["last_scan"] = (
-            last_run_data.decode("utf-8") if last_run_data else "Never"
-        )
-
-        return render(request, "scanner/index.html", context)
-
-    except redis.RedisError as e:
-        logger.warning(f"Redis connection error in index view: {e}", exc_info=True)
-        context = {
-            "ticker_options": {},
-            "ticker_scan": {},
-            "last_scan": "Data temporarily unavailable. Please refresh the page.",
-        }
-        return render(request, "scanner/index.html", context)
-
-    except Exception as e:
-        logger.warning(f"Unexpected error in index view: {e}", exc_info=True)
-        context = {
-            "ticker_options": {},
-            "ticker_scan": {},
-            "last_scan": "Data temporarily unavailable. Please refresh the page.",
-        }
-        return render(request, "scanner/index.html", context)
+    # Use helper function to get scan results with curated stocks
+    context = get_scan_results()
+    return render(request, "scanner/index.html", context)
 
 
 @login_required

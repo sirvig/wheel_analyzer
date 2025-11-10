@@ -3,6 +3,19 @@
 Pending:
 
 Completed:
+- ✅ When navigating to /scanner/ after a scan has already been run, Good/Bad pills were not displaying correctly
+  - **Root Cause**: The `index()` view was not including `curated_stocks` in its context. When the template tried to use `{% with stock=curated_stocks|dict_get:ticker %}`, Django treated the missing variable as an empty string `""`, which then triggered the `dict_get` filter warning: "dict_get received non-dict type: str"
+  - **Fixed**: Refactored `index()` view to use `get_scan_results()` helper function for consistent context across all views
+  - **Files Changed**:
+    - Modified: `scanner/views.py` (refactored `index()` view from ~65 lines to ~10 lines by using `get_scan_results()` helper)
+    - Modified: `scanner/tests/test_scanner_views.py` (added 3 new tests + fixed 1 existing test mock, total 4 test changes)
+  - **How it works**: The `index()` view now calls `get_scan_results()` which fetches both Redis options data AND CuratedStock instances from the database, ensuring `curated_stocks` and `is_local_environment` are always in the context. This provides DRY consistency with `scan_view()` and `scan_status()` views.
+  - **Benefits**:
+    - Good/Bad pills now display correctly on initial page load
+    - Dev warning banner shows consistently in LOCAL environment
+    - Code is DRY (Don't Repeat Yourself) - single source of truth for context building
+    - Easier to maintain - changes to context structure only need to be made in one place
+  - **Testing**: Added 3 comprehensive tests to verify `curated_stocks` is always a dict in context, never None or string. All 6 TestIndexView tests passing.
 - ✅ Getting 'str' object has no attribute 'get' on options_results.html line 35 when Redis data expires
   - **Fixed**: Implemented hybrid defense-in-depth approach with backend validation + defensive template handling + Redis error recovery
   - **Files Changed**:

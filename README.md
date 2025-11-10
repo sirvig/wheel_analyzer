@@ -157,22 +157,30 @@ See `AGENTS.md` for detailed development guidelines.
 
 ## Current Status
 
-**Latest Milestone**: Phase 5 - Visual Indicators (Completed ✅)
+**Latest Milestone**: Phase 5 - Visual Indicators & Reliability (Completed ✅)
 - Options scanner shows strike price vs. intrinsic value comparison
 - Valuations page with highlighted preferred method
 - Comprehensive testing and dark mode support
+- All critical bugs resolved with defense-in-depth error handling
 
-**Recent Updates** (Nov 9, 2025):
-- ✅ Fixed scanner URL routing issue (namespace bug)
-- ✅ Added preferred valuation highlighting in UI
-- ✅ Implemented LOCAL environment market hours bypass for development
-- ✅ Fixed critical Redis timeout bug with defense-in-depth error handling
-- ✅ Added comprehensive test suite (33 new tests for error scenarios)
+**Recent Updates**:
+- **Nov 10, 2025**: Fixed scanner index view context bug - Good/Bad pills now display correctly
+  - Refactored `index()` view to use DRY helper function
+  - Ensured consistent context across all scanner views
+  - Added 3 comprehensive tests with TDD approach
+  - Reduced code complexity by 55 lines
+- **Nov 9, 2025**: Scanner reliability improvements
+  - Fixed URL routing issue (namespace bug)
+  - Added preferred valuation highlighting in UI
+  - Implemented LOCAL environment market hours bypass
+  - Fixed critical Redis timeout bug with defense-in-depth approach
+  - Added 33 tests for error scenarios and graceful degradation
 
 **Next Phase**: Phase 6 - Stock Price Integration
 - Pull current prices from market data API
-- Display undervalued stocks widget
-- Enhance valuations page with price comparison
+- Display undervalued stocks widget on home page
+- Add price column to valuations page
+- Calculate and display undervalued opportunities
 
 ## Testing
 

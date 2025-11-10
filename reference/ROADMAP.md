@@ -374,16 +374,7 @@ See task files for detailed implementation notes.
 - Browser compatibility testing (Chrome, Firefox, Safari)
 - Responsive design verification (desktop, tablet, mobile)
 
-### Phase 6: Utilize stock price for valuations
-
-**Status**: Not started
-
-**Related Tasks**:
-
-**Summary**:
-Utilize the marketdata api to pull stock price from /v1/stocks/quotes/{symbol}.  Use this data to populate a list of stocks from the CuratedStock list that are currently undervalued.  Display that list on the main index/home page as a widget called Targets.  We can also use this data on the Stock Valuation page (add a column with daily close price). Replace the column with Company Name
-
-### Phase 7: Create historical storage of valuation calculations
+### Phase 6: Create historical storage of valuation calculations
 
 **Status**: Not started
 
@@ -391,3 +382,35 @@ Utilize the marketdata api to pull stock price from /v1/stocks/quotes/{symbol}. 
 
 **Summary**:
 The goal here is to store a quarterly calculation of the intrinsic value of each stock.  Ideally I should be able to look back to previous calculations. The storage should start from now and store data for 5 years.  
+
+### Phase 7: Options scanning for individual stocks
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+The goal here is to allow the user to enter an individual stock ticker, select either put or call, and initiate a scan to return options that meet the criteria.  This is similar to the find_options management command and will implement the same functions.  The results should be displayed to the user in a similar manner to the primary scan for options page - this results page does not need to concern itself with the CuratedStock valuations.
+
+### Phase 8: Update the home page with data widgets
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+The goal here is to create a couple of widgets (or data display areas) on the home page for the user.
+
+The initial implementation of this will be with the following data:
+- If there are options found and stored in Redis and if the strike price of the options found are below the valuation of the stock (found in CuratedStock), present a widget that shows the ticker name and let's the user know a favorable option was found for these stock tickers.
+- Create a list of target stocks for the user using the CuratedStock preferred valuation and the last price of the previous day stock price.
+  - Utilize the marketdata api to pull stock price from /v1/stocks/quotes/{symbol}.  Use this data to populate a list of stocks from the CuratedStock list that are currently undervalued.  Display that list on the main index/home page as a widget called Targets.  There will likely need to be a cron job run at the end of the market trading day to capture the last price of the stocks in the CuratedStock list but we can discuss ideas for this data.
+
+### Phase 9: Journal trades
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+The goal here is to create a trading journal similar in concept to the journal I use at https://docs.google.com/spreadsheets/d/1IaMffQtgQxXEf9plX6xhVLi8lfkoKzt1uRNH5SaXqUk/edit?usp=sharing.  Ultimately the purpose of this spreadsheet is to determine income gained from Options sales, stock sales, dividends, and interest.  I want to use this data to see how I am doing on a monthly and yearly basis, capture simple performance, determine how each account is doing, etc.  To do this I need to capture trades I have made on a monthly basis.  Calculate balances for different categories like (Premium for tax advantaged accounts, non-tax advantaged accounts). And there will likely be future enhancements.  This data will be used to calculate taxes owed, and tithes/charitable giving I want to give.

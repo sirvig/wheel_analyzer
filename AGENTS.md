@@ -168,12 +168,14 @@ The Django application can run locally while using Docker only for PostgreSQL an
 **Development Context:**
 - See @reference/ROADMAP.md for current status and next steps
 - Task-based development workflow with numbered tasks in `/tasks` directory
-- **Current Status**: Phase 5 completed ✅ with critical bug fixes. Scanner fully functional and reliable with comprehensive error handling. Key achievements:
+- **Current Status**: Phase 5 completed ✅ with all bugs resolved. Scanner fully functional and reliable with comprehensive error handling. Key achievements:
   - Scanner URL routing fixed (namespace issue)
   - Preferred valuation method highlighting in UI
   - LOCAL environment market hours bypass for development
   - Critical Redis timeout bug fixed with defense-in-depth approach (Task 029)
-  - 33 new tests added for error scenarios and graceful degradation
-  - All pending bugs resolved, all refactors completed
-- **Next**: Begin Phase 6 (Stock Price Integration) or address new features/bugs as they arise.
+  - Scanner index view refactored for DRY consistency (Nov 10, 2025)
+  - Good/Bad pills display correctly on all navigation paths
+  - 36 total tests added for error scenarios and graceful degradation
+  - All pending bugs resolved ✅, all refactors completed ✅
+- **Next**: Begin Phase 6 (Stock Price Integration) - Pull current prices from marketdata API, display undervalued stocks on home page, add price column to valuations page.
   

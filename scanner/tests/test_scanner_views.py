@@ -31,7 +31,8 @@ class TestIndexView:
         """Test that the index view displays options data from Redis."""
         client.force_login(user)
 
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis:
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
+            mock_redis = mock_redis_from_url.return_value
             # Mock Redis responses with sample data
             mock_redis.keys.return_value = [b"put_AAPL", b"put_MSFT"]
 
@@ -102,6 +103,114 @@ class TestIndexView:
             assert "ticker_options" in response.context
             assert "AAPL" not in response.context["ticker_options"]
 
+    def test_index_view_includes_curated_stocks_in_context(
+        self, client, user, clean_curated_stocks
+    ):
+        """Test that index view includes curated_stocks dict in context."""
+        from scanner.factories import CuratedStockFactory
+
+        client.force_login(user)
+
+        # Create test curated stocks (clean_curated_stocks fixture removes existing data)
+        stock1 = CuratedStockFactory(symbol="AAPL", active=True)
+        stock2 = CuratedStockFactory(symbol="MSFT", active=True)
+
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
+            mock_redis = mock_redis_from_url.return_value
+            # Mock Redis with existing scan data
+            mock_redis.keys.return_value = [b"put_AAPL", b"put_MSFT"]
+
+            aapl_options = [
+                {
+                    "date": "2024-12-20",
+                    "strike": 180.0,
+                    "price": 2.50,
+                    "delta": -0.15,
+                    "annualized": 35.5,
+                }
+            ]
+            msft_options = [
+                {
+                    "date": "2024-12-20",
+                    "strike": 400.0,
+                    "price": 3.00,
+                    "delta": -0.18,
+                    "annualized": 32.0,
+                }
+            ]
+
+            def mock_hget(key, field):
+                if key == b"put_AAPL":
+                    if field == "options":
+                        return json.dumps(aapl_options).encode()
+                    elif field == "last_scan":
+                        return b"2024-11-03 10:00"
+                elif key == b"put_MSFT":
+                    if field == "options":
+                        return json.dumps(msft_options).encode()
+                    elif field == "last_scan":
+                        return b"2024-11-03 10:05"
+                return None
+
+            mock_redis.hget.side_effect = mock_hget
+            mock_redis.get.return_value = b"2024-11-03 10:05"
+
+            response = client.get("/scanner/")
+
+            assert response.status_code == 200
+            # Verify curated_stocks is in context
+            assert "curated_stocks" in response.context
+            # Verify it's a dict
+            assert isinstance(response.context["curated_stocks"], dict)
+            # Verify it contains the expected stocks
+            assert "AAPL" in response.context["curated_stocks"]
+            assert "MSFT" in response.context["curated_stocks"]
+            assert response.context["curated_stocks"]["AAPL"] == stock1
+            assert response.context["curated_stocks"]["MSFT"] == stock2
+
+    def test_index_view_includes_is_local_environment_flag(self, client, user):
+        """Test that index view includes is_local_environment flag in context."""
+        client.force_login(user)
+
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
+            with patch("scanner.views.settings") as mock_settings:
+                mock_redis = mock_redis_from_url.return_value
+                mock_redis.keys.return_value = []
+                mock_redis.get.return_value = b"Never"
+
+                # Test with LOCAL environment
+                mock_settings.ENVIRONMENT = "LOCAL"
+                response = client.get("/scanner/")
+
+                assert response.status_code == 200
+                assert "is_local_environment" in response.context
+                assert response.context["is_local_environment"] is True
+
+                # Test with PRODUCTION environment
+                mock_settings.ENVIRONMENT = "PRODUCTION"
+                response = client.get("/scanner/")
+
+                assert response.status_code == 200
+                assert "is_local_environment" in response.context
+                assert response.context["is_local_environment"] is False
+
+    def test_index_view_curated_stocks_always_dict_never_string(self, client, user):
+        """Test that index view always returns dict for curated_stocks, preventing template errors."""
+        client.force_login(user)
+
+        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
+            mock_redis = mock_redis_from_url.return_value
+            mock_redis.keys.return_value = []
+            mock_redis.get.return_value = b"Never"
+
+            response = client.get("/scanner/")
+
+            assert response.status_code == 200
+            # This is the key assertion - curated_stocks must be a dict
+            assert isinstance(response.context["curated_stocks"], dict)
+            # Should be empty when no options data exists
+            assert response.context["curated_stocks"] == {}
+
 
 @pytest.mark.django_db
 class TestScanView:
@@ -130,7 +239,9 @@ class TestScanView:
 
     @patch("scanner.views.perform_scan")
     @patch("scanner.views.redis.Redis.from_url")
-    def test_scan_view_successful_scan(self, mock_redis_from_url, mock_perform_scan, client):
+    def test_scan_view_successful_scan(
+        self, mock_redis_from_url, mock_perform_scan, client
+    ):
         """Test successful scan execution."""
         mock_redis = mock_redis_from_url.return_value
         # Mock Redis lock (no existing lock)
@@ -201,7 +312,9 @@ class TestScanView:
 
     @patch("scanner.views.perform_scan")
     @patch("scanner.views.redis.Redis.from_url")
-    def test_scan_view_handles_errors(self, mock_redis_from_url, mock_perform_scan, client):
+    def test_scan_view_handles_errors(
+        self, mock_redis_from_url, mock_perform_scan, client
+    ):
         """Test scan view handles errors gracefully."""
         mock_redis = mock_redis_from_url.return_value
         # Mock Redis lock (no existing lock)
@@ -473,12 +586,14 @@ class TestRedisErrorHandling:
         """get_scan_results returns safe defaults on Redis connection error."""
         from scanner.views import get_scan_results
         import redis as redis_module
-        
+
         # Mock Redis connection failure
-        mock_redis_from_url.side_effect = redis_module.ConnectionError("Connection refused")
-        
+        mock_redis_from_url.side_effect = redis_module.ConnectionError(
+            "Connection refused"
+        )
+
         result = get_scan_results()
-        
+
         # Should return safe defaults
         assert result["ticker_options"] == {}
         assert result["ticker_scan"] == {}
@@ -491,12 +606,12 @@ class TestRedisErrorHandling:
         """get_scan_results returns safe defaults on Redis timeout."""
         from scanner.views import get_scan_results
         import redis as redis_module
-        
+
         # Mock Redis timeout
         mock_redis_from_url.side_effect = redis_module.TimeoutError("Timeout")
-        
+
         result = get_scan_results()
-        
+
         # Should return safe defaults
         assert result["curated_stocks"] == {}
         assert isinstance(result["curated_stocks"], dict)
@@ -505,14 +620,14 @@ class TestRedisErrorHandling:
     def test_get_scan_results_json_decode_error(self, mock_redis_from_url):
         """get_scan_results handles malformed JSON gracefully."""
         from scanner.views import get_scan_results
-        
+
         mock_redis = mock_redis_from_url.return_value
         mock_redis.keys.return_value = [b"put_AAPL"]
         mock_redis.hget.return_value = b"invalid json{"
         mock_redis.get.return_value = b"Never"
-        
+
         result = get_scan_results()
-        
+
         # Should handle gracefully - ticker won't be in results due to JSON error
         assert isinstance(result["curated_stocks"], dict)
 
@@ -520,14 +635,14 @@ class TestRedisErrorHandling:
     def test_get_scan_results_none_hget_response(self, mock_redis_from_url):
         """get_scan_results handles None response from hget."""
         from scanner.views import get_scan_results
-        
+
         mock_redis = mock_redis_from_url.return_value
         mock_redis.keys.return_value = [b"put_AAPL"]
         mock_redis.hget.return_value = None  # Key doesn't exist or expired
         mock_redis.get.return_value = b"Never"
-        
+
         result = get_scan_results()
-        
+
         # Should handle gracefully - empty ticker_options
         assert result["ticker_options"] == {}
         assert isinstance(result["curated_stocks"], dict)
@@ -539,19 +654,19 @@ class TestRedisErrorHandling:
         """get_scan_results always returns dict for curated_stocks, never None or string."""
         from scanner.views import get_scan_results
         import redis as redis_module
-        
+
         # Test with various error conditions
         test_cases = [
             redis_module.ConnectionError("Connection failed"),
             redis_module.TimeoutError("Timeout"),
             Exception("Unexpected error"),
         ]
-        
+
         for error in test_cases:
             mock_redis_from_url.side_effect = error
-            
+
             result = get_scan_results()
-            
+
             assert isinstance(result["curated_stocks"], dict)
             assert result["curated_stocks"] == {}
 
@@ -559,13 +674,15 @@ class TestRedisErrorHandling:
     def test_index_view_redis_connection_error(self, mock_redis_from_url, client, user):
         """index view handles Redis connection error gracefully."""
         import redis as redis_module
-        
+
         # Mock Redis connection failure
-        mock_redis_from_url.side_effect = redis_module.ConnectionError("Connection refused")
-        
+        mock_redis_from_url.side_effect = redis_module.ConnectionError(
+            "Connection refused"
+        )
+
         client.force_login(user)
         response = client.get("/scanner/")
-        
+
         # Should render successfully with safe defaults
         assert response.status_code == 200
         assert "Data temporarily unavailable" in response.context["last_scan"]
@@ -574,12 +691,14 @@ class TestRedisErrorHandling:
     def test_scan_status_view_redis_error(self, mock_redis_from_url, client, user):
         """scan_status view handles Redis errors via get_scan_results."""
         import redis as redis_module
-        
-        mock_redis_from_url.side_effect = redis_module.ConnectionError("Connection refused")
-        
+
+        mock_redis_from_url.side_effect = redis_module.ConnectionError(
+            "Connection refused"
+        )
+
         client.force_login(user)
         response = client.get("/scanner/scan/status/")
-        
+
         # Should render successfully with safe defaults
         assert response.status_code == 200
         assert response.context["curated_stocks"] == {}
