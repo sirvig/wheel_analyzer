@@ -1,10 +1,37 @@
 """Tests for scanner views."""
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.conf import settings
+from django.core.cache import cache
 from django.urls import reverse
+
+
+def setup_scanner_cache(ticker_options=None, ticker_scan_times=None, last_run="Never"):
+    """
+    Helper function to set up scanner cache data for tests.
+
+    Args:
+        ticker_options: Dict of {ticker: [options]} or None
+        ticker_scan_times: Dict of {ticker: timestamp} or None
+        last_run: Last scan message string
+    """
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options",
+        ticker_options or {},
+        timeout=settings.CACHE_TTL_OPTIONS,
+    )
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times",
+        ticker_scan_times or {},
+        timeout=settings.CACHE_TTL_OPTIONS,
+    )
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+        last_run,
+        timeout=settings.CACHE_TTL_OPTIONS,
+    )
 
 
 @pytest.mark.django_db
@@ -13,95 +40,116 @@ class TestIndexView:
 
     def test_index_view_renders_successfully(self, client, user):
         """Test that the index view renders without errors."""
+        from django.core.cache import cache
+        from django.conf import settings
+
         client.force_login(user)
 
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis:
-            # Mock Redis responses
-            mock_redis = mock_redis.return_value
-            mock_redis.keys.return_value = []
-            mock_redis.get.return_value = b"2024-11-03 10:00"
+        # Mock cache with simple data
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options",
+            {},
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times",
+            {},
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+            "2024-11-03 10:00",
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
 
-            response = client.get("/scanner/")
+        response = client.get("/scanner/")
 
-            assert response.status_code == 200
-            assert "last_scan" in response.context
-            assert response.context["last_scan"] == "2024-11-03 10:00"
+        assert response.status_code == 200
+        assert "last_scan" in response.context
+        assert response.context["last_scan"] == "2024-11-03 10:00"
 
     def test_index_view_displays_options_data(self, client, user):
-        """Test that the index view displays options data from Redis."""
+        """Test that the index view displays options data from cache."""
+        from django.core.cache import cache
+        from django.conf import settings
+
         client.force_login(user)
 
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
-            mock_redis = mock_redis_from_url.return_value
-            # Mock Redis responses with sample data
-            mock_redis.keys.return_value = [b"put_AAPL", b"put_MSFT"]
+        # Mock options data
+        aapl_options = [
+            {
+                "date": "2024-12-20",
+                "strike": 180.0,
+                "price": 2.50,
+                "delta": -0.15,
+                "annualized": 35.5,
+            }
+        ]
+        msft_options = [
+            {
+                "date": "2024-12-20",
+                "strike": 400.0,
+                "price": 3.00,
+                "delta": -0.18,
+                "annualized": 32.0,
+            }
+        ]
 
-            # Mock options data
-            aapl_options = [
-                {
-                    "date": "2024-12-20",
-                    "strike": 180.0,
-                    "price": 2.50,
-                    "delta": -0.15,
-                    "annualized": 35.5,
-                }
-            ]
-            msft_options = [
-                {
-                    "date": "2024-12-20",
-                    "strike": 400.0,
-                    "price": 3.00,
-                    "delta": -0.18,
-                    "annualized": 32.0,
-                }
-            ]
+        # Set cache data
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options",
+            {"AAPL": aapl_options, "MSFT": msft_options},
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times",
+            {"AAPL": "2024-11-03 10:00", "MSFT": "2024-11-03 10:05"},
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+            "2024-11-03 10:05",
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
 
-            def mock_hget(key, field):
-                if key == b"put_AAPL":
-                    if field == "options":
-                        return json.dumps(aapl_options).encode()
-                    elif field == "last_scan":
-                        return b"2024-11-03 10:00"
-                elif key == b"put_MSFT":
-                    if field == "options":
-                        return json.dumps(msft_options).encode()
-                    elif field == "last_scan":
-                        return b"2024-11-03 10:05"
-                return None
+        response = client.get("/scanner/")
 
-            mock_redis.hget.side_effect = mock_hget
-            mock_redis.get.return_value = b"2024-11-03 10:05"
-
-            response = client.get("/scanner/")
-
-            assert response.status_code == 200
-            assert "ticker_options" in response.context
-            assert "AAPL" in response.context["ticker_options"]
-            assert "MSFT" in response.context["ticker_options"]
-            assert len(response.context["ticker_options"]["AAPL"]) == 1
-            assert len(response.context["ticker_options"]["MSFT"]) == 1
+        assert response.status_code == 200
+        assert "ticker_options" in response.context
+        assert "AAPL" in response.context["ticker_options"]
+        assert "MSFT" in response.context["ticker_options"]
+        assert len(response.context["ticker_options"]["AAPL"]) == 1
+        assert len(response.context["ticker_options"]["MSFT"]) == 1
 
     def test_index_view_handles_no_options(self, client, user):
         """Test that the index view handles case with no options found."""
+        from django.core.cache import cache
+        from django.conf import settings
+
         client.force_login(user)
 
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis:
-            # Mock Redis responses with empty options
-            mock_redis.keys.return_value = [b"put_AAPL"]
+        # Set cache with empty ticker_options
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options",
+            {},  # No options
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times",
+            {},
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
+            "2024-11-03 10:00",
+            timeout=settings.CACHE_TTL_OPTIONS,
+        )
 
-            def mock_hget(key, field):
-                if key == b"put_AAPL" and field == "options":
-                    return json.dumps([]).encode()
-                return None
+        response = client.get("/scanner/")
 
-            mock_redis.hget.side_effect = mock_hget
-            mock_redis.get.return_value = b"2024-11-03 10:00"
-
-            response = client.get("/scanner/")
-
-            assert response.status_code == 200
-            assert "ticker_options" in response.context
-            assert "AAPL" not in response.context["ticker_options"]
+        assert response.status_code == 200
+        assert "ticker_options" in response.context
+        assert "AAPL" not in response.context["ticker_options"]
 
     def test_index_view_includes_curated_stocks_in_context(
         self, client, user, clean_curated_stocks
@@ -115,84 +163,68 @@ class TestIndexView:
         stock1 = CuratedStockFactory(symbol="AAPL", active=True)
         stock2 = CuratedStockFactory(symbol="MSFT", active=True)
 
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
-            mock_redis = mock_redis_from_url.return_value
-            # Mock Redis with existing scan data
-            mock_redis.keys.return_value = [b"put_AAPL", b"put_MSFT"]
+        # Set up cache with scan data
+        aapl_options = [
+            {
+                "date": "2024-12-20",
+                "strike": 180.0,
+                "price": 2.50,
+                "delta": -0.15,
+                "annualized": 35.5,
+            }
+        ]
+        msft_options = [
+            {
+                "date": "2024-12-20",
+                "strike": 400.0,
+                "price": 3.00,
+                "delta": -0.18,
+                "annualized": 32.0,
+            }
+        ]
 
-            aapl_options = [
-                {
-                    "date": "2024-12-20",
-                    "strike": 180.0,
-                    "price": 2.50,
-                    "delta": -0.15,
-                    "annualized": 35.5,
-                }
-            ]
-            msft_options = [
-                {
-                    "date": "2024-12-20",
-                    "strike": 400.0,
-                    "price": 3.00,
-                    "delta": -0.18,
-                    "annualized": 32.0,
-                }
-            ]
+        setup_scanner_cache(
+            ticker_options={"AAPL": aapl_options, "MSFT": msft_options},
+            ticker_scan_times={"AAPL": "2024-11-03 10:00", "MSFT": "2024-11-03 10:05"},
+            last_run="2024-11-03 10:05",
+        )
 
-            def mock_hget(key, field):
-                if key == b"put_AAPL":
-                    if field == "options":
-                        return json.dumps(aapl_options).encode()
-                    elif field == "last_scan":
-                        return b"2024-11-03 10:00"
-                elif key == b"put_MSFT":
-                    if field == "options":
-                        return json.dumps(msft_options).encode()
-                    elif field == "last_scan":
-                        return b"2024-11-03 10:05"
-                return None
+        response = client.get("/scanner/")
 
-            mock_redis.hget.side_effect = mock_hget
-            mock_redis.get.return_value = b"2024-11-03 10:05"
-
-            response = client.get("/scanner/")
-
-            assert response.status_code == 200
-            # Verify curated_stocks is in context
-            assert "curated_stocks" in response.context
-            # Verify it's a dict
-            assert isinstance(response.context["curated_stocks"], dict)
-            # Verify it contains the expected stocks
-            assert "AAPL" in response.context["curated_stocks"]
-            assert "MSFT" in response.context["curated_stocks"]
-            assert response.context["curated_stocks"]["AAPL"] == stock1
-            assert response.context["curated_stocks"]["MSFT"] == stock2
+        assert response.status_code == 200
+        # Verify curated_stocks is in context
+        assert "curated_stocks" in response.context
+        # Verify it's a dict
+        assert isinstance(response.context["curated_stocks"], dict)
+        # Verify it contains the expected stocks
+        assert "AAPL" in response.context["curated_stocks"]
+        assert "MSFT" in response.context["curated_stocks"]
+        assert response.context["curated_stocks"]["AAPL"] == stock1
+        assert response.context["curated_stocks"]["MSFT"] == stock2
 
     def test_index_view_includes_is_local_environment_flag(self, client, user):
         """Test that index view includes is_local_environment flag in context."""
         client.force_login(user)
 
-        with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
-            with patch("scanner.views.settings") as mock_settings:
-                mock_redis = mock_redis_from_url.return_value
-                mock_redis.keys.return_value = []
-                mock_redis.get.return_value = b"Never"
+        with patch("scanner.views.settings") as mock_settings:
+            # Set up cache with empty data
+            setup_scanner_cache()
 
-                # Test with LOCAL environment
-                mock_settings.ENVIRONMENT = "LOCAL"
-                response = client.get("/scanner/")
+            # Test with LOCAL environment
+            mock_settings.ENVIRONMENT = "LOCAL"
+            response = client.get("/scanner/")
 
-                assert response.status_code == 200
-                assert "is_local_environment" in response.context
-                assert response.context["is_local_environment"] is True
+            assert response.status_code == 200
+            assert "is_local_environment" in response.context
+            assert response.context["is_local_environment"] is True
 
-                # Test with PRODUCTION environment
-                mock_settings.ENVIRONMENT = "PRODUCTION"
-                response = client.get("/scanner/")
+            # Test with PRODUCTION environment
+            mock_settings.ENVIRONMENT = "PRODUCTION"
+            response = client.get("/scanner/")
 
-                assert response.status_code == 200
-                assert "is_local_environment" in response.context
-                assert response.context["is_local_environment"] is False
+            assert response.status_code == 200
+            assert "is_local_environment" in response.context
+            assert response.context["is_local_environment"] is False
 
     def test_index_view_curated_stocks_always_dict_never_string(self, client, user):
         """Test that index view always returns dict for curated_stocks, preventing template errors."""
@@ -334,7 +366,6 @@ class TestScanView:
         mock_redis.keys.return_value = []
         mock_redis.get.return_value = b"2024-11-03 10:30"
 
-
         # Mock error result
         mock_perform_scan.return_value = {
             "success": False,
@@ -365,7 +396,6 @@ class TestScanView:
         mock_r.exists.return_value = False
         mock_r.keys.return_value = []
         mock_r.get.return_value = b"2024-11-03 10:30"
-
 
         # Mock exception during scan
         mock_perform_scan.side_effect = Exception("Unexpected error")
@@ -452,7 +482,7 @@ class TestOptionsListView:
         with patch("scanner.views.redis.Redis.from_url") as mock_redis_from_url:
             # Setup mock redis instance
             mock_redis = mock_redis_from_url.return_value
-            
+
             # Mock Redis responses
             aapl_options = [
                 {
@@ -473,7 +503,9 @@ class TestOptionsListView:
 
             mock_redis.hget.side_effect = mock_hget
 
-            response = client.get(reverse("scanner:options_list", kwargs={"ticker": "AAPL"}))
+            response = client.get(
+                reverse("scanner:options_list", kwargs={"ticker": "AAPL"})
+            )
 
             assert response.status_code == 200
             assert "ticker" in response.context
@@ -731,17 +763,20 @@ class TestRedisErrorHandling:
         # Setup mock redis instance for scan_status view
         mock_redis = mock_redis_from_url.return_value
         mock_redis.exists.return_value = False  # No scan in progress
-        
+
         # Make get_scan_results fail by having the second call to from_url raise error
         # First call (scan_status line 226) succeeds, second call (get_scan_results line 103) fails
         call_count = [0]
+
         def side_effect_fn(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 return mock_redis  # First call succeeds
             else:
-                raise redis_module.ConnectionError("Connection refused")  # Second call fails
-        
+                raise redis_module.ConnectionError(
+                    "Connection refused"
+                )  # Second call fails
+
         mock_redis_from_url.side_effect = side_effect_fn
 
         client.force_login(user)
@@ -759,6 +794,7 @@ class TestScannerDjangoCacheIntegration:
     def setup_method(self):
         """Clear cache before each test."""
         from django.core.cache import cache
+
         cache.clear()
 
     def test_get_scan_results_uses_django_cache(self):
@@ -766,27 +802,27 @@ class TestScannerDjangoCacheIntegration:
         from django.core.cache import cache
         from django.conf import settings
         from scanner.views import get_scan_results
-        
+
         # Pre-populate cache with test data
         cache.set(
             f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options",
             {"AAPL": [{"strike": 145.0, "premium": 2.5}]},
-            timeout=settings.CACHE_TTL_OPTIONS
+            timeout=settings.CACHE_TTL_OPTIONS,
         )
         cache.set(
             f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_scan_times",
             {"AAPL": "2025-11-10 14:30:00"},
-            timeout=settings.CACHE_TTL_OPTIONS
+            timeout=settings.CACHE_TTL_OPTIONS,
         )
         cache.set(
             f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
             "Test scan completed",
-            timeout=settings.CACHE_TTL_OPTIONS
+            timeout=settings.CACHE_TTL_OPTIONS,
         )
-        
+
         # Call function
         result = get_scan_results()
-        
+
         # Verify it used cache
         assert result["ticker_options"]["AAPL"][0]["strike"] == 145.0
         assert result["last_scan"] == "Test scan completed"
@@ -797,50 +833,52 @@ class TestScannerDjangoCacheIntegration:
         from django.core.cache import cache
         from django.conf import settings
         from scanner.views import run_scan_in_background
-        
+
         # Mock the perform_scan function
-        with patch('scanner.views.perform_scan') as mock_perform_scan:
+        with patch("scanner.views.perform_scan") as mock_perform_scan:
             mock_perform_scan.return_value = {
                 "success": True,
                 "scanned_count": 1,
-                "scan_results": {"AAPL": [{"strike": 145}]}
+                "scan_results": {"AAPL": [{"strike": 145}]},
             }
-            
+
             # Mock cache.set to verify timeout
-            with patch.object(cache, 'set', wraps=cache.set) as mock_cache_set:
+            with patch.object(cache, "set", wraps=cache.set) as mock_cache_set:
                 run_scan_in_background()
-                
+
                 # Verify cache.set called with correct timeout for ticker_options
                 for call_args in mock_cache_set.call_args_list:
                     args, kwargs = call_args
-                    if 'scanner:ticker_options' in str(args[0]):
-                        assert kwargs['timeout'] == settings.CACHE_TTL_OPTIONS
+                    if "scanner:ticker_options" in str(args[0]):
+                        assert kwargs["timeout"] == settings.CACHE_TTL_OPTIONS
 
     def test_no_direct_redis_usage_in_views(self):
         """Verify views don't use redis.Redis.from_url()."""
         import inspect
         from scanner import views
-        
+
         # Get source code of views module
         source = inspect.getsource(views)
-        
+
         # Should NOT contain direct Redis client usage
-        assert 'redis.Redis.from_url' not in source, \
+        assert "redis.Redis.from_url" not in source, (
             "Views should not use redis.Redis.from_url() - use Django cache instead"
-        
+        )
+
         # Should use Django cache import
-        assert 'from django.core.cache import cache' in source, \
+        assert "from django.core.cache import cache" in source, (
             "Views should import Django cache"
+        )
 
     def test_cache_error_handling_preserved(self, client, user):
         """Cache error handling still works with Django cache."""
         from django.core.cache import cache
-        
+
         # Mock cache.get to raise exception
-        with patch.object(cache, 'get', side_effect=Exception("Cache error")):
+        with patch.object(cache, "get", side_effect=Exception("Cache error")):
             client.force_login(user)
             response = client.get(reverse("scanner:scan_status"))
-            
+
             # Should return safe defaults, not crash
             assert response.status_code == 200
             assert response.context["ticker_options"] == {}
@@ -851,29 +889,27 @@ class TestScannerDjangoCacheIntegration:
         from django.core.cache import cache
         from django.conf import settings
         from scanner.views import run_scan_in_background
-        
+
         # Mock perform_scan
-        with patch('scanner.views.perform_scan') as mock_perform_scan:
+        with patch("scanner.views.perform_scan") as mock_perform_scan:
             mock_perform_scan.return_value = {
                 "success": True,
                 "scanned_count": 2,
                 "scan_results": {
                     "AAPL": [{"strike": 145, "premium": 2.5}],
-                    "MSFT": [{"strike": 340, "premium": 3.0}]
-                }
+                    "MSFT": [{"strike": 340, "premium": 3.0}],
+                },
             }
-            
+
             # Run scan
             run_scan_in_background()
-            
+
             # Verify data in cache
             ticker_options = cache.get(
                 f"{settings.CACHE_KEY_PREFIX_SCANNER}:ticker_options"
             )
-            last_run = cache.get(
-                f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run"
-            )
-            
+            last_run = cache.get(f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run")
+
             assert ticker_options is not None
             assert "AAPL" in ticker_options
             assert "MSFT" in ticker_options
@@ -883,25 +919,25 @@ class TestScannerDjangoCacheIntegration:
         """scan_view() sets status in Django cache."""
         from django.core.cache import cache
         from django.conf import settings
-        
+
         client.force_login(user)
-        
+
         # Mock perform_scan to prevent actual scan
-        with patch('scanner.views.perform_scan') as mock_perform_scan:
+        with patch("scanner.views.perform_scan") as mock_perform_scan:
             mock_perform_scan.return_value = {
                 "success": True,
                 "scanned_count": 0,
-                "scan_results": {}
+                "scan_results": {},
             }
-            
+
             # Trigger scan
             response = client.post(reverse("scanner:scan"))
-            
+
             # Verify scan_in_progress flag set in cache
             scan_in_progress = cache.get(
                 f"{settings.CACHE_KEY_PREFIX_SCANNER}:scan_in_progress"
             )
-            
+
             # It may be True or None (deleted after scan completes)
             # Just verify the key was used
             assert response.status_code == 200
