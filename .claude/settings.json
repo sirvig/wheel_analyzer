@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/notification.py "
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/notification.py --notify"
           },
           {
             "type": "command",
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_stop.py"
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_stop.py --notify"
           },
           {
             "type": "command",

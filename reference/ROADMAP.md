@@ -498,12 +498,166 @@ See task files and AGENTS.md for detailed implementation notes.
 
 ### Phase 6: Create historical storage of valuation calculations
 
-**Status**: Not started
+**Status**: Planned - Ready for Implementation
 
 **Related Tasks**:
 
+- ⏳ `035-create-valuation-history-model.md` - Create ValuationHistory model and migration
+- ⏳ `036-quarterly-snapshot-command.md` - Create quarterly snapshot management command
+- ⏳ `037-stock-history-backend.md` - Implement per-stock history backend view
+- ⏳ `038-stock-history-frontend.md` - Create per-stock history frontend template
+- ⏳ `039-comparison-report-backend.md` - Implement comparison report backend
+- ⏳ `040-comparison-report-frontend.md` - Create comparison report frontend
+- ⏳ `041-csv-export.md` - Implement CSV export functionality
+- ⏳ `042-testing-and-documentation.md` - Testing and documentation
+
 **Summary**:
-The goal here is to store a quarterly calculation of the intrinsic value of each stock.  Ideally I should be able to look back to previous calculations. The storage should start from now and store data for 5 years.  
+Create a comprehensive historical valuation storage system that captures quarterly snapshots of intrinsic value calculations with complete DCF assumptions. This enables trend analysis, comparison reports, and tracking valuation changes over time.
+
+**Implementation Plan**: See `specs/phase-6-historical-valuations.md` for detailed specifications
+
+**Key Features**:
+
+1. **ValuationHistory Model**
+   - Quarterly snapshots (Jan 1, Apr 1, Jul 1, Oct 1) of intrinsic value calculations
+   - Stores both EPS and FCF valuation results
+   - Captures complete DCF assumptions (growth rates, multiples, desired return)
+   - Foreign key relationship to CuratedStock with CASCADE delete
+   - Unique constraint on (stock, snapshot_date) prevents duplicates
+   - Indexes for efficient per-stock and quarterly queries
+   - Indefinite data retention (no auto-deletion)
+
+2. **Quarterly Snapshot Management Command**
+   - `python manage.py create_quarterly_valuation_snapshot`
+   - Idempotent (skips existing snapshots, prevents duplicates)
+   - Command options: `--date`, `--symbols`, `--force`, `--dry-run`
+   - Scheduled via cron: Quarterly on Jan 1, Apr 1, Jul 1, Oct 1 at 11 PM ET
+   - Comprehensive error handling and logging
+   - Summary statistics output (created/skipped/errors)
+
+3. **Per-Stock History View**
+   - URL: `/scanner/valuations/history/<symbol>/`
+   - Displays quarterly snapshots with trend visualization placeholder
+   - Responsive Tailwind CSS table showing all historical data
+   - Columns: Quarter, EPS Value, EPS, FCF Value, FCF/Share, Growth %, Return %
+   - "No data" state for stocks without history
+   - "View History" links from valuations page
+
+4. **Comparison Report**
+   - URL: `/scanner/valuations/comparison/`
+   - Compares current valuations vs. previous quarter vs. year-ago
+   - Calculates deltas (absolute change and percentage change)
+   - Color-coded indicators (green for increases, red for decreases)
+   - Handles missing snapshots gracefully (shows "-")
+   - Accessible from valuations page navigation
+
+5. **CSV Export**
+   - Single-stock export: `/valuations/export/<symbol>/`
+   - All-stocks export: `/valuations/export/`
+   - Comprehensive format with all valuation data and assumptions
+   - Filename convention: `valuation_history_SYMBOL_DATE.csv`
+   - One-click download from UI
+
+**Technical Implementation**:
+- Database: PostgreSQL with B-tree indexes on snapshot_date and (stock, snapshot_date)
+- Query patterns: `select_related('stock')` for efficient joins
+- Storage projection: ~400 KB for 10 years (50 stocks × 4 quarters × 10 years)
+- Performance: O(log n) query performance with indexes
+- Backwards compatible: No changes to existing CuratedStock model
+- Testing: 60+ new tests (model, command, views, CSV) bringing total to 276 tests
+
+**Data Storage**:
+- Quarterly granularity balances detail with storage efficiency
+- Each snapshot: ~200 bytes × ~1,000 records (5 years) = ~200 KB
+- Negligible storage impact on PostgreSQL
+- Efficient queries even with decades of data
+
+**Acceptance Criteria**:
+- ✅ Quarterly snapshots created automatically on calendar quarters
+- ✅ Historical data retained indefinitely (no deletion)
+- ✅ Per-stock history page shows valuation trends over time
+- ✅ Comparison reports display current vs. historical with deltas
+- ✅ CSV export downloads complete historical data
+- ✅ All 216 existing tests continue to pass
+- ✅ 60+ new tests achieve >90% coverage for historical features
+- ✅ Query performance <200ms for stock history (20 snapshots)
+- ✅ Comparison report loads <300ms (50 stocks × 3 quarters)
+
+**Future Enhancements** (Phase 6.1):
+- Chart.js visualizations (line charts for trends, bar charts for deltas)
+- Advanced analytics (valuation volatility, CAGR calculations, sensitivity analysis)
+- REST API endpoints for external tool integration
+- Historical price tracking (integrate with Phase 8 stock prices)
+- Notification system (email alerts for significant valuation changes)
+- Django admin actions for bulk operations
+
+**Estimated Effort**: 8-12 hours across 8 tasks
+
+**Dependencies**:
+- Requires existing CuratedStock model with intrinsic value fields (Phase 4)
+- Compatible with existing scanner views and templates (Phase 5)
+- No breaking changes to existing functionality
+
+See task files in `/tasks/` directory and detailed implementation plan in `specs/phase-6-historical-valuations.md` for complete specifications.
+
+### Phase 6.1: Historical Valuation Visualizations and Advanced Analytics
+
+**Status**: To be planned later
+
+**Summary**:
+Enhance Phase 6 historical valuation features with interactive visualizations, advanced analytics, and API integration. This phase focuses on making historical data more actionable and accessible.
+
+**Planned Features**:
+
+1. **Chart Visualizations (Chart.js)**
+   - Line chart: Intrinsic value trend over time (EPS vs. FCF)
+   - Bar chart: Quarterly deltas (quarter-over-quarter changes)
+   - Stacked area chart: Assumption impact visualization
+   - Responsive design with Chart.js
+   - Interactive tooltips and zoom functionality
+
+2. **Advanced Analytics**
+   - Valuation volatility analysis (standard deviation of historical values)
+   - Assumption sensitivity analysis (impact of changing growth rates)
+   - Compound annual growth rate (CAGR) calculations
+   - Correlation analysis (valuation vs. actual stock price)
+   - Analytics dashboard view in Django admin
+
+3. **REST API Endpoints**
+   - `GET /api/stocks/{symbol}/history/` - JSON historical data
+   - `GET /api/stocks/comparison/` - JSON comparison report
+   - Token-based authentication (Django REST Framework)
+   - Integration with Excel/Google Sheets
+   - Support for mobile app development
+
+4. **Historical Price Tracking** (integrates with Phase 8)
+   - Store historical stock prices alongside valuations
+   - Calculate undervaluation percentage over time
+   - Identify best entry points historically
+   - Backtest strategy performance
+   - Add `stock_price` and `undervaluation_pct` fields to ValuationHistory
+
+5. **Notification System**
+   - Email alerts when quarterly snapshot created
+   - Alerts for significant valuation changes (>10% delta)
+   - Weekly digest email with portfolio valuation summary
+   - Django signals on ValuationHistory creation
+   - Celery task for async email sending
+   - User preferences for notification settings
+
+**Technical Implementation**:
+- Chart.js via CDN for lightweight client-side rendering
+- Analytics module: `scanner/analytics.py`
+- Django REST Framework for API endpoints
+- Celery + Redis for async notifications
+- Django signals for event-driven architecture
+
+**Dependencies**:
+- Requires Phase 6 completion
+- Integrates with Phase 8 (stock price data)
+- May require Celery setup for notifications
+
+**Estimated Effort**: 10-15 hours across 5-7 tasks
 
 ### Phase 7: Options scanning for individual stocks
 

@@ -252,5 +252,12 @@ The Django application can run locally while using Docker only for PostgreSQL an
   - Good/Bad pills display correctly on all navigation paths
   - Fixed URL namespacing, template paths, authentication, mocks, and assertions
   - All pending bugs resolved ✅, all refactors completed ✅
-- **Next**: Begin Phase 6 (Stock Price Integration) - Pull current prices from marketdata API, display undervalued stocks on home page, add price column to valuations page.
+- **Next**: Begin Phase 6 (Historical Valuation Storage) - Implementation ready with 8 tasks (035-042):
+  - Quarterly snapshots of intrinsic value calculations (Jan 1, Apr 1, Jul 1, Oct 1)
+  - Per-stock history pages with trend analysis
+  - Comparison reports (current vs. previous quarter vs. year-ago)
+  - CSV export for external analysis
+  - Track complete DCF assumptions with each snapshot
+  - Comprehensive plan in `specs/phase-6-historical-valuations.md`
+  - Target: 276/276 tests (216 existing + 60 new)
   

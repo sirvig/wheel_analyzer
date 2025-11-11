@@ -6,3 +6,5 @@
 .pytest-cache
 db.sqlite3
 docker-compose.yml
+.claude/*
+.gemini/*

@@ -16,6 +16,9 @@ PLAN_OUTPUT_DIRECTORY: `specs/`
 ## Instructions
 
 - Carefully analyze the user's requirements provided in the USER_PROMPT variable
+- Ask me clarifying questions until you are 95% confident you can complete this task successfully.
+  - If the question is about choosing different options, please provide me with a list of options to choose from. Mark the option with a clear label, like a, b, c, etc.
+  - If the question need custom input that is not in the list of options, please ask me to provide the custom input.
 - Think deeply (ultrathink) about the best approach to implement the requested functionality or solve the problem
 - Create a concise implementation plan that includes:
   - Clear problem statement and objectives

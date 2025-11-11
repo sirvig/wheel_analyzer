@@ -27,7 +27,7 @@ A Django-based web application for tracking and analyzing stock options trading 
 
 - **Backend**: Django 5.1+, Python 3.13+
 - **Database**: PostgreSQL 14.1
-- **Cache**: Redis 6.2
+- **Cache**: Redis 6.2 with Django cache framework
 - **Frontend**: HTMX, Tailwind CSS, Flowbite
 - **Package Manager**: uv
 - **Task Runner**: just
@@ -113,7 +113,7 @@ ENVIRONMENT=LOCAL  # or TESTING, PRODUCTION
 - `python manage.py cron_scanner` - Scheduled options scan
 - `python manage.py cron_sma` - Calculate moving averages
 
-See `AGENTS.md` for complete command reference.
+See `CLAUDE.md` for complete command reference.
 
 ## Project Structure
 
@@ -128,7 +128,8 @@ wheel-analyzer/
 │   └── models.py         # User, Account, Campaign, Transaction
 ├── templates/            # Django templates
 ├── static/               # CSS, JS, images
-├── tasks/                # Development task files
+├── tasks/                # Development task files (001-042)
+├── specs/                # Implementation specifications
 └── reference/            # Documentation (ROADMAP, BUGS, REFACTORS)
 ```
 
@@ -143,7 +144,7 @@ wheel-analyzer/
 - Quarterly earnings (EPS TTM)
 - Cash flow statements (FCF TTM)
 - Company fundamentals
-- 7-day Redis caching to minimize API calls
+- 7-day Django cache to minimize API calls
 
 ## Development Workflow
 
@@ -153,18 +154,26 @@ wheel-analyzer/
 4. **Test**: Run `just test` to verify changes
 5. **Document**: Update ROADMAP.md and reference files
 
-See `AGENTS.md` for detailed development guidelines.
+See `CLAUDE.md` for detailed development guidelines.
 
 ## Current Status
 
 **Latest Milestone**: Phase 5 - Visual Indicators & Reliability (Completed ✅)
 - Options scanner shows strike price vs. intrinsic value comparison
 - Valuations page with highlighted preferred method
-- Comprehensive testing and dark mode support
-- All critical bugs resolved with defense-in-depth error handling
-- **100% test pass rate** - 180/180 tests passing ✅
+- Comprehensive testing and error handling
+- Cache migration to Django framework (17x performance improvement)
+- **100% test pass rate** - 216/216 tests passing ✅
 
 **Recent Updates**:
+- **Nov 11, 2025**: Phase 6 Planning Complete
+  - Created comprehensive implementation plan (`specs/phase-6-historical-valuations.md`)
+  - Updated ROADMAP.md with Phase 6 and Phase 6.1 sections
+  - Created 8 task files (035-042) for historical valuation storage
+  - Ready for implementation: Quarterly snapshots, per-stock history, comparison reports, CSV export
+  - Estimated implementation: 8-12 hours across 8 tasks
+  - Target: 276/276 tests (60 new tests planned)
+
 - **Nov 10, 2025 (Evening)**: Completed cache migration to Django framework
   - Migrated from direct Redis usage to Django cache backend (Tasks 030-034)
   - Added 40+ new cache tests for comprehensive coverage
@@ -172,30 +181,26 @@ See `AGENTS.md` for detailed development guidelines.
   - Alpha Vantage API caching: 7-day TTL (604,800s)
   - Scanner options caching: 45-min TTL (2,700s)
   - All 216 tests passing with improved testability
+
 - **Nov 10, 2025 (PM)**: Fixed all failing tests - achieved 100% test pass rate
   - Fixed URL namespace issues (10 tests)
   - Fixed template include paths (1 test)
   - Added authentication to tests (9 tests)
   - Fixed mock configurations (8 tests)
   - Updated assertions for async behavior (6 tests)
-  - All 180 tests now passing with no regressions
+
 - **Nov 10, 2025 (AM)**: Fixed scanner index view context bug
   - Refactored `index()` view to use DRY helper function
   - Ensured consistent context across all scanner views
   - Added 3 comprehensive tests with TDD approach
-  - Reduced code complexity by 55 lines
-- **Nov 9, 2025**: Scanner reliability improvements
-  - Fixed URL routing issue (namespace bug)
-  - Added preferred valuation highlighting in UI
-  - Implemented LOCAL environment market hours bypass
-  - Fixed critical Redis timeout bug with defense-in-depth approach
-  - Added 36 tests for error scenarios and graceful degradation
 
-**Next Phase**: Phase 6 - Stock Price Integration
-- Pull current prices from market data API
-- Display undervalued stocks widget on home page
-- Add price column to valuations page
-- Calculate and display undervalued opportunities
+**Next Phase**: Phase 6 - Historical Valuation Storage
+- Store quarterly snapshots of intrinsic value calculations (Jan 1, Apr 1, Jul 1, Oct 1)
+- Per-stock history pages with trend analysis
+- Comparison reports (current vs. previous quarter vs. year-ago)
+- CSV export for external analysis (Excel, Google Sheets, Python)
+- Track complete DCF assumptions with each snapshot
+- Implementation tasks 035-042 ready in `/tasks` directory
 
 ## Testing
 
@@ -210,31 +215,56 @@ just test scanner/tests/test_scanner_views.py
 uv run pytest --cov
 ```
 
-**Test Suite**: 180 tests passing (100% pass rate) ✅
+**Test Suite**: 216 tests passing (100% pass rate) ✅
 - Scanner views and integration tests
 - Valuation calculation tests (EPS & FCF methods)
 - Template filter tests with type safety validation
 - Redis error handling and timeout scenarios
 - Integration tests for graceful degradation
 - Authentication and authorization tests
+- Cache framework tests (Django cache with Redis backend)
+
+**Phase 6 Target**: 276 tests (216 existing + 60 new)
+
+## Roadmap
+
+### Completed Phases
+- ✅ **Phase 1**: Curated Stock List (database-driven)
+- ✅ **Phase 2**: Manual Scan Trigger (HTMX-powered)
+- ✅ **Phase 3**: Polling for Scan Progress (real-time updates)
+- ✅ **Phase 4**: Fair Value Calculations (EPS & FCF DCF models)
+- ✅ **Phase 4.1**: API Rate Limit Optimization (rolling updates)
+- ✅ **Phase 5**: Visual Intrinsic Value Indicators (color-coded badges)
+- ✅ **Phase 5.1**: Cache Migration to Django Framework (17x faster)
+- ✅ **Phase 5.2**: Testing and Bug Fixes (100% test pass rate)
+
+### Planned Phases
+- 📋 **Phase 6**: Historical Valuation Storage - **Ready for implementation** (Tasks 035-042)
+- 📋 **Phase 6.1**: Visualizations & Analytics (Chart.js, advanced analytics, API)
+- 📋 **Phase 7**: Individual Stock Scanning (custom ticker search)
+- 📋 **Phase 8**: Stock Price Integration (marketdata API)
+- 📋 **Phase 9**: Home Page Widgets (undervalued stocks, favorable options)
+- 📋 **Phase 10**: Trading Journal (performance tracking, tax calculations)
+
+See `reference/ROADMAP.md` for detailed phase descriptions.
 
 ## Contributing
 
-1. Review `AGENTS.md` for coding standards
+1. Review `CLAUDE.md` for coding standards
 2. Follow task-based development workflow
-3. Maintain test coverage for new features
+3. Maintain test coverage for new features (>90% target)
 4. Update documentation (ROADMAP, task files)
 
 ## License
 
-[Your License Here]
+Private project - All rights reserved
 
 ## Support
 
 For issues, feature requests, or questions:
 - Review `reference/ROADMAP.md` for planned features
-- Check `reference/BUGS.md` for known issues
-- See `AGENTS.md` for development context
+- See `CLAUDE.md` for development context
+- Check `/tasks` directory for implementation details
 
 ---
 
