@@ -496,7 +496,25 @@ See task files and AGENTS.md for detailed implementation notes.
 - Production-ready with comprehensive error handling ✅
 - Ready for Phase 6 ✅
 
-### Phase 6: Stock Price Integration
+### Phase 6: Create historical storage of valuation calculations
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+The goal here is to store a quarterly calculation of the intrinsic value of each stock.  Ideally I should be able to look back to previous calculations. The storage should start from now and store data for 5 years.  
+
+### Phase 7: Options scanning for individual stocks
+
+**Status**: Not started
+
+**Related Tasks**:
+
+**Summary**:
+The goal here is to allow the user to enter an individual stock ticker, select either put or call, and initiate a scan to return options that meet the criteria.  This is similar to the find_options management command and will implement the same functions.  The results should be displayed to the user in a similar manner to the primary scan for options page - this results page does not need to concern itself with the CuratedStock valuations.
+
+### Phase 8: Stock Price Integration
 
 **Status**: Not started
 
@@ -540,25 +558,7 @@ Integrate current stock prices from marketdata API to identify undervalued inves
 
 **Estimated Tasks**: 5-7 tasks
 
-### Phase 7: Create historical storage of valuation calculations
-
-**Status**: Not started
-
-**Related Tasks**:
-
-**Summary**:
-The goal here is to store a quarterly calculation of the intrinsic value of each stock.  Ideally I should be able to look back to previous calculations. The storage should start from now and store data for 5 years.  
-
-### Phase 7: Options scanning for individual stocks
-
-**Status**: Not started
-
-**Related Tasks**:
-
-**Summary**:
-The goal here is to allow the user to enter an individual stock ticker, select either put or call, and initiate a scan to return options that meet the criteria.  This is similar to the find_options management command and will implement the same functions.  The results should be displayed to the user in a similar manner to the primary scan for options page - this results page does not need to concern itself with the CuratedStock valuations.
-
-### Phase 8: Update the home page with data widgets
+### Phase 9: Update the home page with data widgets
 
 **Status**: Not started
 
@@ -572,7 +572,7 @@ The initial implementation of this will be with the following data:
 - Create a list of target stocks for the user using the CuratedStock preferred valuation and the last price of the previous day stock price.
   - Utilize the marketdata api to pull stock price from /v1/stocks/quotes/{symbol}.  Use this data to populate a list of stocks from the CuratedStock list that are currently undervalued.  Display that list on the main index/home page as a widget called Targets.  There will likely need to be a cron job run at the end of the market trading day to capture the last price of the stocks in the CuratedStock list but we can discuss ideas for this data.
 
-### Phase 9: Journal trades
+### Phase 10: Journal trades
 
 **Status**: Not started
 

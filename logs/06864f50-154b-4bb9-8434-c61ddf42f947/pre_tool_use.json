@@ -1,0 +1,84 @@
+[
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "default",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git ls",
+      "description": "Run git ls command"
+    }
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git ls-files",
+      "description": "List all tracked files in repository"
+    }
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git ls-files",
+      "description": "List all tracked files in repository"
+    }
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Read",
+    "tool_input": {
+      "file_path": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer/.claude/settings.json"
+    }
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Read",
+    "tool_input": {
+      "file_path": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer/.claude/hooks/stop.py"
+    }
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Read",
+    "tool_input": {
+      "file_path": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer/.claude/hooks/utils/tts/elevenlabs_tts.py"
+    }
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Edit",
+    "tool_input": {
+      "file_path": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer/.claude/settings.json",
+      "old_string": "    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat\"\n          },\n          {\n            \"type\": \"command\",\n            \"command\": \"uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app wheel-analyzer --event-type Stop --add-chat\"\n          }\n        ]\n      }\n    ],",
+      "new_string": "    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat --notify\"\n          },\n          {\n            \"type\": \"command\",\n            \"command\": \"uv run $CLAUDE_PROJECT_DIR/.claude/hooks/send_event.py --source-app wheel-analyzer --event-type Stop --add-chat\"\n          }\n        ]\n      }\n    ],"
+    }
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+  "prompts": [
+    "git ls",
+    "ls-files",
+    "git ls-files",
+    "My hook to announce task completion is not working with elevenlabs and I am trying to understand why.  I was able to test the script manually and get an audio output"
+  ]
+}

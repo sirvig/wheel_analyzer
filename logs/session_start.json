@@ -1,0 +1,37 @@
+[
+  {
+    "session_id": "c5e3b562-12dc-4e1a-836d-296f280a9cd6",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/c5e3b562-12dc-4e1a-836d-296f280a9cd6.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  },
+  {
+    "session_id": "1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  },
+  {
+    "session_id": "c9f30a18-c232-4378-bc75-e74720679f9f",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/c9f30a18-c232-4378-bc75-e74720679f9f.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  },
+  {
+    "session_id": "633b7a40-7879-4429-b525-1d61e8b7c4ef",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/633b7a40-7879-4429-b525-1d61e8b7c4ef.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  }
+]

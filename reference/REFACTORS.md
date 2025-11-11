@@ -1,7 +1,6 @@
 # Refactors
 
 Pending:
-- Allow the loglevel of the calculate_intrinsic_value command to be set to DEBUG.  I think we can change this to pass a --loglevel parameter and use that to set the logging level for the individual job.
 
 Completed:
 - ✅ **LOCAL Environment Market Hours Bypass** - Implemented ability to run options scans outside market hours when `ENVIRONMENT=LOCAL`. This development-only feature allows testing and debugging the scanner functionality without waiting for market hours (9:30 AM - 4:00 PM ET). The scanner now checks `settings.ENVIRONMENT` and passes `debug=True` to `perform_scan()` when in LOCAL mode, bypassing the `is_market_open()` check. Added amber warning banners to both `scan_polling.html` and `options_results.html` to alert developers that data may be stale when scans run outside market hours. Created `.env.example` with ENVIRONMENT documentation. Added comprehensive tests to verify LOCAL bypass behavior and PRODUCTION enforcement.

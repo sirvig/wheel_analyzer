@@ -1,0 +1,18 @@
+[
+  {
+    "session_id": "1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "default",
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false
+  },
+  {
+    "session_id": "1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "default",
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false
+  }
+]

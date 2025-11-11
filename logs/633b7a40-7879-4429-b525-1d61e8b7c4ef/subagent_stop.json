@@ -1,0 +1,10 @@
+[
+  {
+    "session_id": "633b7a40-7879-4429-b525-1d61e8b7c4ef",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/633b7a40-7879-4429-b525-1d61e8b7c4ef.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "default",
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false
+  }
+]

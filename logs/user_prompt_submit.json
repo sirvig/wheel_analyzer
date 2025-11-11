@@ -1,0 +1,50 @@
+[
+  {
+    "session_id": "c5e3b562-12dc-4e1a-836d-296f280a9cd6",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/c5e3b562-12dc-4e1a-836d-296f280a9cd6.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "git ls-files"
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "default",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "git ls"
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "ls-files"
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "git ls-files"
+  },
+  {
+    "session_id": "06864f50-154b-4bb9-8434-c61ddf42f947",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/06864f50-154b-4bb9-8434-c61ddf42f947.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "My hook to announce task completion is not working with elevenlabs and I am trying to understand why.  I was able to test the script manually and get an audio output"
+  },
+  {
+    "session_id": "1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8",
+    "transcript_path": "/Users/danvigliotti/.claude/projects/-Users-danvigliotti-Development-Sirvig-wheel-analyzer/1f5d2e5c-7eca-4158-a91e-4ec07ee21dd8.jsonl",
+    "cwd": "/Users/danvigliotti/Development/Sirvig/wheel-analyzer",
+    "permission_mode": "default",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "git ls-files"
+  }
+]

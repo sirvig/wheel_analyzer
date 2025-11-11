@@ -1,0 +1,7 @@
+{
+  "session_id": "a3c4685e-a481-4fe3-85bb-32204489db5d",
+  "prompts": [
+    "git ls-files",
+    "git ls-files"
+  ]
+}
