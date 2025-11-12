@@ -5,17 +5,14 @@ Pending:
 
 Completed:
 - ✅ We are missing legend labels and axis labels on the "Intrinsic value trends" chart on /scanner/valuations/analytics/ page and on the "Current Intrinsic Values by Method" chart on the /scanner/valuations/comparison/ page
-  - **Root Cause**: This was NOT a code issue - all labels were correctly configured. The issue was browser cache showing old HTML before bugfixes were committed.
-  - **Resolution**: Browser cache issue - required hard refresh to see the updated charts
-  - **Code Verification**: Systematic code review confirmed all Chart.js configurations are correct:
-    - **Analytics page**: Legend display: true (position: bottom), X-axis: "Snapshot Date", Y-axis: "Intrinsic Value ($)", 26 datasets with stock symbol labels (AAPL, ADBE, etc.)
-    - **Comparison page**: Legend display: true (position: top), X-axis: "Stock Symbol", Y-axis: "Intrinsic Value ($)", 2 datasets with labels ("EPS Method" and "FCF Method")
-  - **Solution for users**: Hard refresh browser (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows) or clear browser cache
-  - **Files verified**:
-    - scanner/views.py: Chart data preparation with proper dataset labels (lines 372, 381, 521, 528, 747)
-    - templates/scanner/analytics.html: Legend and axis configuration (lines 226-285)
-    - templates/scanner/valuation_comparison.html: Legend and axis configuration (lines 235-292)
-  - **Verification**: All 243 tests passing. Charts render correctly with all labels when page is refreshed.
+  - **Root Cause**: Dark mode detection was incorrect. The JavaScript was checking for `document.documentElement.classList.contains('dark')` which wasn't reliably detecting the actual page background color. This caused text labels to be rendered in colors that matched the background (invisible labels).
+  - **Fixed**: Changed dark mode detection to read actual computed background color from `window.getComputedStyle(document.body).backgroundColor` and check RGB values to determine light vs dark background, then apply contrasting text colors.
+  - **Files Changed**:
+    - Modified: `templates/scanner/analytics.html` - Updated color detection logic (lines 207-216)
+    - Modified: `templates/scanner/valuation_comparison.html` - Updated color detection logic (lines 216-225)
+    - Modified: `templates/scanner/stock_history.html` - Updated color detection logic (lines 219-228)
+  - **How it works**: JavaScript now reads the actual background color using `getComputedStyle()`, parses the RGB value, and determines if background is dark (RGB < 128) or light. Then applies correct contrasting colors: light text (#f9fafb) on dark backgrounds, dark text (#1f2937) on light backgrounds.
+  - **Verification**: Labels now visible on all three chart pages across both light and dark modes. User confirmed fix works after testing with diagnostic tools.
 
 Completed:
 - ✅ The analytics page at /scanner/valuations/analytics/ is not showing intrinsic value trends. Total stocks are showing up as 26 but "With history" is 0 and no charts are being drawn

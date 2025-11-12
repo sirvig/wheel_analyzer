@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 {% endblock %}
 
 {% block content %}
@@ -204,10 +204,16 @@
     const ctx = document.getElementById('trendChart').getContext('2d');
     const chartData = {{ chart_data_json|safe }};
 
-    // Get computed colors for dark mode
-    const isDark = document.documentElement.classList.contains('dark');
+    // Get computed colors from the actual page styles
+    const computedStyle = window.getComputedStyle(document.body);
+    const bgColor = computedStyle.backgroundColor;
+
+    // Detect if we're in dark mode by checking background lightness
+    const isDark = bgColor.includes('rgb') &&
+                   parseInt(bgColor.split(',')[0].replace(/[^\d]/g, '')) < 128;
+
     const textColor = isDark ? '#f9fafb' : '#1f2937';
-    const gridColor = isDark ? '#374151' : '#e5e7eb';
+    const gridColor = isDark ? '#4b5563' : '#d1d5db';
 
     new Chart(ctx, {
       type: 'line',
