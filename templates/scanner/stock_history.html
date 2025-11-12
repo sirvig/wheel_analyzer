@@ -3,6 +3,10 @@
 
 {% block title %}{{ stock.symbol }} - Valuation History{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+{% endblock %}
+
 {% block content %}
 <div class="container mx-auto px-4 py-6">
     <!-- Header -->
@@ -53,6 +57,95 @@
                 </div>
             </div>
         </div>
+
+        {% if quick_stats %}
+        <!-- Quick Stats Boxes -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+                <h3 class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Highest IV</h3>
+                <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">${{ quick_stats.highest_iv }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ quick_stats.highest_date|date:"M d, Y" }}</p>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+                <h3 class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Lowest IV</h3>
+                <p class="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">${{ quick_stats.lowest_iv }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ quick_stats.lowest_date|date:"M d, Y" }}</p>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+                <h3 class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Average IV</h3>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">${{ quick_stats.average_iv }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">All snapshots</p>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+                <h3 class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Current vs. Avg</h3>
+                <p class="text-2xl font-bold {% if quick_stats.vs_average_pct > 0 %}text-green-600 dark:text-green-400{% elif quick_stats.vs_average_pct < 0 %}text-red-600 dark:text-red-400{% else %}text-gray-900 dark:text-white{% endif %} mt-1">
+                    {% if quick_stats.vs_average_pct > 0 %}+{% endif %}{{ quick_stats.vs_average_pct }}%
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {% if quick_stats.vs_average_pct > 0 %}Above{% elif quick_stats.vs_average_pct < 0 %}Below{% else %}At{% endif %} average
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if chart_data_json %}
+        <!-- Trend Chart -->
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Intrinsic Value Trend</h2>
+            <div class="relative h-80">
+                <canvas id="historyChart"></canvas>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if analytics %}
+        <!-- Analytics Card -->
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Analytics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Volatility (Std Dev)</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">
+                        {% if analytics.effective_volatility.std_dev %}
+                            {{ analytics.effective_volatility.std_dev }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                    {% if analytics.effective_volatility.coefficient_of_variation %}
+                    <p class="text-xs text-gray-500 dark:text-gray-400">CV: {{ analytics.effective_volatility.coefficient_of_variation }}%</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">CAGR</p>
+                    <p class="text-lg font-bold {% if analytics.effective_cagr > 0 %}text-green-600 dark:text-green-400{% elif analytics.effective_cagr < 0 %}text-red-600 dark:text-red-400{% else %}text-gray-900 dark:text-white{% endif %}">
+                        {% if analytics.effective_cagr %}
+                            {{ analytics.effective_cagr }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Compound annual growth</p>
+                </div>
+
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Method Correlation</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">
+                        {% if analytics.correlation %}
+                            {{ analytics.correlation }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">EPS vs. FCF</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Historical Snapshots Table -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -115,4 +208,94 @@
         </div>
     {% endif %}
 </div>
+
+{% if chart_data_json %}
+<script>
+  // Initialize Chart.js with trend data
+  document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('historyChart').getContext('2d');
+    const chartData = {{ chart_data_json|safe }};
+
+    // Get computed colors for dark mode
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#f9fafb' : '#1f2937';
+    const gridColor = isDark ? '#374151' : '#e5e7eb';
+
+    new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          title: {
+            display: false,
+          },
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              color: textColor,
+              usePointStyle: true,
+              padding: 15,
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                  label += '$' + context.parsed.y.toFixed(2);
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Quarter',
+              color: textColor
+            },
+            ticks: {
+              color: textColor
+            },
+            grid: {
+              color: gridColor
+            }
+          },
+          y: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Intrinsic Value ($)',
+              color: textColor
+            },
+            ticks: {
+              color: textColor,
+              callback: function(value) {
+                return '$' + value.toFixed(0);
+              }
+            },
+            grid: {
+              color: gridColor
+            }
+          }
+        }
+      }
+    });
+  });
+</script>
+{% endif %}
+
 {% endblock %}

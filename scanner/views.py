@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 import threading
 from datetime import date, datetime
@@ -10,6 +11,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
+from scanner.analytics import get_portfolio_analytics, get_stock_analytics
 from scanner.models import CuratedStock, ValuationHistory
 from scanner.scanner import perform_scan
 
@@ -327,12 +329,100 @@ def stock_history_view(request, symbol):
         stock: CuratedStock instance
         history: QuerySet of ValuationHistory ordered by date descending
         has_history: Boolean indicating if any snapshots exist
+        analytics: Stock analytics dictionary
+        chart_data_json: JSON string with chart data
+        quick_stats: Dictionary with highest, lowest, average IVs
     """
     # Get stock
     stock = get_object_or_404(CuratedStock, symbol=symbol.upper(), active=True)
 
-    # Get history ordered by date (newest first)
+    # Get history ordered by date (newest first for display)
     history = ValuationHistory.objects.filter(stock=stock).order_by('-snapshot_date')
+
+    # Get analytics
+    stock_analytics = None
+    chart_data = None
+    quick_stats = None
+
+    if history.exists():
+        try:
+            stock_analytics = get_stock_analytics(symbol.upper())
+
+            # Prepare chart data (chronological order for chart)
+            history_chronological = history.order_by('snapshot_date')
+
+            chart_labels = [h.quarter_label for h in history_chronological]
+            eps_data = [
+                float(h.eps_intrinsic_value) if h.eps_intrinsic_value else None
+                for h in history_chronological
+            ]
+            fcf_data = [
+                float(h.fcf_intrinsic_value) if h.fcf_intrinsic_value else None
+                for h in history_chronological
+            ]
+
+            # Determine line widths based on preferred method
+            eps_width = 3 if stock.preferred_valuation_method == 'EPS' else 2
+            fcf_width = 3 if stock.preferred_valuation_method == 'FCF' else 2
+
+            chart_data = {
+                'labels': chart_labels,
+                'datasets': [
+                    {
+                        'label': 'EPS Method',
+                        'data': eps_data,
+                        'borderColor': 'rgb(59, 130, 246)',
+                        'backgroundColor': 'rgba(59, 130, 246, 0.1)',
+                        'borderWidth': eps_width,
+                        'pointRadius': 4,
+                        'pointHoverRadius': 6,
+                    },
+                    {
+                        'label': 'FCF Method',
+                        'data': fcf_data,
+                        'borderColor': 'rgb(34, 197, 94)',
+                        'backgroundColor': 'rgba(34, 197, 94, 0.1)',
+                        'borderWidth': fcf_width,
+                        'pointRadius': 4,
+                        'pointHoverRadius': 6,
+                    }
+                ]
+            }
+
+            # Calculate quick stats
+            effective_values = [
+                float(h.get_effective_intrinsic_value())
+                for h in history_chronological
+                if h.get_effective_intrinsic_value()
+            ]
+
+            if effective_values:
+                highest_iv = max(effective_values)
+                lowest_iv = min(effective_values)
+                average_iv = sum(effective_values) / len(effective_values)
+                current_iv = effective_values[-1]
+
+                # Find dates for highest and lowest
+                highest_snapshot = max(
+                    history_chronological,
+                    key=lambda h: float(h.get_effective_intrinsic_value() or 0)
+                )
+                lowest_snapshot = min(
+                    history_chronological,
+                    key=lambda h: float(h.get_effective_intrinsic_value() or 0) if h.get_effective_intrinsic_value() else float('inf')
+                )
+
+                quick_stats = {
+                    'highest_iv': round(highest_iv, 2),
+                    'highest_date': highest_snapshot.snapshot_date,
+                    'lowest_iv': round(lowest_iv, 2),
+                    'lowest_date': lowest_snapshot.snapshot_date,
+                    'average_iv': round(average_iv, 2),
+                    'current_iv': round(current_iv, 2),
+                    'vs_average_pct': round(((current_iv - average_iv) / average_iv) * 100, 1) if average_iv else None,
+                }
+        except Exception as e:
+            logger.warning(f"Error calculating analytics for {symbol}: {e}")
 
     logger.info(f"Stock history view accessed by {request.user.username} for {symbol}")
     logger.debug(f"Found {history.count()} historical snapshots for {symbol}")
@@ -341,6 +431,9 @@ def stock_history_view(request, symbol):
         'stock': stock,
         'history': history,
         'has_history': history.exists(),
+        'analytics': stock_analytics,
+        'chart_data_json': json.dumps(chart_data) if chart_data else None,
+        'quick_stats': quick_stats,
     }
 
     return render(request, 'scanner/stock_history.html', context)
@@ -410,6 +503,37 @@ def valuation_comparison_view(request):
             'year_pct': year_pct,
         })
 
+    # Prepare chart data for bar chart
+    chart_labels = [stock.symbol for stock in stocks]
+    eps_data = [
+        float(stock.intrinsic_value) if stock.intrinsic_value else 0
+        for stock in stocks
+    ]
+    fcf_data = [
+        float(stock.intrinsic_value_fcf) if stock.intrinsic_value_fcf else 0
+        for stock in stocks
+    ]
+
+    chart_data = {
+        'labels': chart_labels,
+        'datasets': [
+            {
+                'label': 'EPS Method',
+                'data': eps_data,
+                'backgroundColor': 'rgba(59, 130, 246, 0.8)',
+                'borderColor': 'rgb(59, 130, 246)',
+                'borderWidth': 1,
+            },
+            {
+                'label': 'FCF Method',
+                'data': fcf_data,
+                'backgroundColor': 'rgba(34, 197, 94, 0.8)',
+                'borderColor': 'rgb(34, 197, 94)',
+                'borderWidth': 1,
+            }
+        ]
+    }
+
     logger.info(f"Valuation comparison view accessed by {request.user.username}")
     logger.debug(f"Comparing {len(comparison_data)} stocks")
 
@@ -417,6 +541,7 @@ def valuation_comparison_view(request):
         'stocks': comparison_data,
         'comparison_date_quarter': previous_quarter_date,
         'comparison_date_year': year_ago_date,
+        'chart_data_json': json.dumps(chart_data),
     }
 
     return render(request, 'scanner/valuation_comparison.html', context)
@@ -524,3 +649,121 @@ def export_valuation_history_csv(request, symbol=None):
     logger.info(f"CSV export requested by {request.user.username} for symbol={symbol}")
 
     return response
+
+
+def _generate_chart_color(index: int) -> str:
+    """
+    Generate a consistent color for chart lines based on index.
+
+    Uses a predefined palette of distinct colors for chart visualization.
+
+    Args:
+        index: Index for color selection
+
+    Returns:
+        RGB color string (e.g., 'rgb(59, 130, 246)')
+    """
+    colors = [
+        'rgb(59, 130, 246)',   # Blue
+        'rgb(34, 197, 94)',    # Green
+        'rgb(239, 68, 68)',    # Red
+        'rgb(251, 146, 60)',   # Orange
+        'rgb(168, 85, 247)',   # Purple
+        'rgb(236, 72, 153)',   # Pink
+        'rgb(14, 165, 233)',   # Sky
+        'rgb(132, 204, 22)',   # Lime
+        'rgb(251, 191, 36)',   # Amber
+        'rgb(6, 182, 212)',    # Cyan
+        'rgb(244, 63, 94)',    # Rose
+        'rgb(124, 58, 237)',   # Violet
+        'rgb(34, 211, 238)',   # Light blue
+        'rgb(163, 230, 53)',   # Yellow-green
+        'rgb(249, 115, 22)',   # Deep orange
+        'rgb(217, 70, 239)',   # Fuchsia
+        'rgb(20, 184, 166)',   # Teal
+        'rgb(234, 179, 8)',    # Yellow
+        'rgb(225, 29, 72)',    # Deep red
+        'rgb(99, 102, 241)',   # Indigo
+    ]
+    return colors[index % len(colors)]
+
+
+@login_required
+def analytics_view(request):
+    """
+    Display comprehensive analytics dashboard with portfolio metrics and trends.
+
+    Shows:
+    - Portfolio overview with aggregate metrics
+    - Multi-line trend chart of intrinsic values over time
+    - Stock-by-stock analytics table with volatility, CAGR, correlation
+    - Method comparison visualizations
+
+    Returns:
+        Rendered analytics.html template with chart data and metrics
+    """
+    # Get portfolio-wide analytics
+    portfolio_analytics = get_portfolio_analytics()
+
+    # Prepare chart data for trend visualization
+    # Collect all unique snapshot dates across all stocks
+    all_dates = set()
+    stocks_data = {}
+
+    active_stocks = CuratedStock.objects.filter(is_active=True).prefetch_related(
+        'valuation_history'
+    )
+
+    for stock in active_stocks:
+        history = stock.valuation_history.all().order_by('snapshot_date')
+        if history.exists():
+            stocks_data[stock.symbol] = {
+                'history': list(history),
+                'color': _generate_chart_color(len(stocks_data)),
+            }
+            all_dates.update(h.snapshot_date for h in history)
+
+    # Sort dates chronologically
+    sorted_dates = sorted(all_dates)
+
+    # Build chart datasets
+    chart_labels = [d.strftime('%Y-%m-%d') for d in sorted_dates]
+    chart_datasets = []
+
+    for symbol, data in stocks_data.items():
+        # Create a mapping of date -> value
+        date_value_map = {
+            h.snapshot_date: float(h.get_effective_intrinsic_value())
+            for h in data['history']
+            if h.get_effective_intrinsic_value() is not None
+        }
+
+        # Build data array with None for missing dates
+        chart_data_points = [
+            date_value_map.get(d) for d in sorted_dates
+        ]
+
+        chart_datasets.append({
+            'label': symbol,
+            'data': chart_data_points,
+            'borderColor': data['color'],
+            'backgroundColor': data['color'],
+            'borderWidth': 2,
+            'fill': False,
+            'spanGaps': True,  # Connect lines even if there are gaps
+        })
+
+    chart_data = {
+        'labels': chart_labels,
+        'datasets': chart_datasets,
+    }
+
+    context = {
+        'analytics': portfolio_analytics,
+        'chart_data_json': json.dumps(chart_data),
+        'date_range': 'All Time',
+    }
+
+    logger.info(f"Analytics page accessed by {request.user.username}")
+
+    return render(request, 'scanner/analytics.html', context)

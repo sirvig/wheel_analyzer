@@ -3,6 +3,10 @@
 
 {% block title %}Valuation Comparison Report{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+{% endblock %}
+
 {% block content %}
 <div class="container mx-auto px-4 py-6">
     <!-- Header -->
@@ -45,6 +49,16 @@
             </div>
         </div>
     </div>
+
+    <!-- Current Intrinsic Values Bar Chart -->
+    {% if chart_data_json %}
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Current Intrinsic Values by Method</h2>
+        <div class="relative" style="height: 400px;">
+            <canvas id="comparisonChart"></canvas>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Comparison Table -->
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -191,4 +205,95 @@
         </div>
     </div>
 </div>
+
+{% if chart_data_json %}
+<script>
+  // Initialize Chart.js with bar chart data
+  document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+    const chartData = {{ chart_data_json|safe }};
+
+    // Get computed colors for dark mode
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#f9fafb' : '#1f2937';
+    const gridColor = isDark ? '#374151' : '#e5e7eb';
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          title: {
+            display: false,
+          },
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              color: textColor,
+              usePointStyle: true,
+              padding: 15,
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                  label += '$' + context.parsed.y.toFixed(2);
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Stock Symbol',
+              color: textColor
+            },
+            ticks: {
+              color: textColor
+            },
+            grid: {
+              color: gridColor
+            }
+          },
+          y: {
+            display: true,
+            beginAtZero: false,
+            title: {
+              display: true,
+              text: 'Intrinsic Value ($)',
+              color: textColor
+            },
+            ticks: {
+              color: textColor,
+              callback: function(value) {
+                return '$' + value.toFixed(0);
+              }
+            },
+            grid: {
+              color: gridColor
+            }
+          }
+        }
+      }
+    });
+  });
+</script>
+{% endif %}
+
 {% endblock %}
