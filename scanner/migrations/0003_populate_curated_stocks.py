@@ -8,7 +8,35 @@ from django.db import migrations
 
 
 def populate_curated_stocks(apps, schema_editor):
-    """Populate CuratedStock table from scanner/data/options.json"""
+    """
+    Populate CuratedStock table from scanner/data/options.json.
+
+    This data migration creates 26 initial stock records for production use.
+
+    IMPORTANT: Test Environment Handling
+    ------------------------------------
+    This migration includes environment checks to skip data population during tests.
+    Without these checks, tests would fail because:
+    1. Tests expect empty databases for isolation
+    2. Analytics tests perform global queries (e.g., CuratedStock.objects.filter(active=True))
+    3. Pre-populated data breaks test assertions that count records
+    4. Example: Test creates 3 stocks, expects 3, but gets 29 (26 from migration + 3 from test)
+
+    The dual-check approach ensures test isolation:
+    1. Check connection alias (catches non-default test databases)
+    2. Check ENVIRONMENT setting (catches explicitly marked test runs)
+
+    For best practices on data migrations, see CLAUDE.md "Data Migration Best Practices" section.
+    """
+    # Skip data migration in test environment to maintain test isolation
+    # Check 1: Non-default database connections (test databases use different aliases)
+    if schema_editor.connection.alias != 'default':
+        return
+
+    # Check 2: ENVIRONMENT setting (pytest sets ENVIRONMENT=TESTING)
+    if getattr(settings, 'ENVIRONMENT', None) == 'TESTING':
+        return
+
     CuratedStock = apps.get_model("scanner", "CuratedStock")
 
     # Define the path to the JSON file

@@ -4,6 +4,19 @@ Pending:
 (none)
 
 Completed:
+- ✅ Fix failing tests - 10 analytics-related tests were failing due to data migration pollution
+  - **Root Cause**: Migration `0003_populate_curated_stocks.py` runs during test database setup, creating 26 CuratedStock objects. Analytics tests calling `get_portfolio_analytics()` perform global queries returning migration data + test data instead of just test data, breaking test assertions. Additionally, test files had naming mismatches between expected context variables and what views actually provided (`'portfolio_analytics'` vs `'analytics'`, `'highest_iv'` vs `'quick_stats'`).
+  - **Fixed**: Added environment checks to migration to skip data population in test environments (2 checks: connection alias and ENVIRONMENT setting). Updated test assertions to match actual view context variable names (5 occurrences changed from `'portfolio_analytics'` to `'analytics'`, 1 test updated to access `'quick_stats'` dictionary).
+  - **Files Changed**:
+    - Modified: `scanner/migrations/0003_populate_curated_stocks.py` (added 6 lines: environment checks in `populate_curated_stocks()` function)
+    - Modified: `scanner/tests/test_analytics_views.py` (updated 6 test assertions to match actual context variable names)
+  - **How it works**: Migration now checks `schema_editor.connection.alias != 'default'` and `settings.ENVIRONMENT == 'TESTING'` before populating data. If either condition is true, migration returns early without creating any CuratedStock objects. This maintains test isolation while preserving production behavior. Test assertions now correctly reference `response.context['analytics']` and `response.context['quick_stats']` to match view implementations.
+  - **Verification**:
+    - All 302 tests now passing (100% pass rate) ✅
+    - Previously: 10 failed, 292 passed
+    - Migration still populates 26 stocks in production environments
+    - Test database starts clean with no pre-populated data
+  - **Prevention**: Document in CLAUDE.md that data migrations must check environment. Use fixtures for initial data instead of RunPython. Consider management commands for production data seeding.
 - ✅ We are missing legend labels and axis labels on the "Intrinsic value trends" chart on /scanner/valuations/analytics/ page and on the "Current Intrinsic Values by Method" chart on the /scanner/valuations/comparison/ page
   - **Root Cause**: Dark mode detection was incorrect. The JavaScript was checking for `document.documentElement.classList.contains('dark')` which wasn't reliably detecting the actual page background color. This caused text labels to be rendered in colors that matched the background (invisible labels).
   - **Fixed**: Changed dark mode detection to read actual computed background color from `window.getComputedStyle(document.body).backgroundColor` and check RGB values to determine light vs dark background, then apply contrasting text colors.

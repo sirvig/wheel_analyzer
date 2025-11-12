@@ -226,6 +226,45 @@ The Django application can run locally while using Docker only for PostgreSQL an
 4. Apply migrations: `just exec python manage.py migrate`
 5. To downgrade: `just exec python manage.py showmigrations` then `just exec python manage.py migrate <app> <migration_number>`
 
+### Data Migration Best Practices
+
+**IMPORTANT**: Data migrations (using `RunPython`) run in ALL environments including tests. Follow these rules:
+
+1. **Always check environment in data migrations**:
+   ```python
+   def populate_data(apps, schema_editor):
+       # Skip data migration in test environment
+       if schema_editor.connection.alias != 'default':
+           return
+
+       from django.conf import settings
+       if getattr(settings, 'ENVIRONMENT', None) == 'TESTING':
+           return
+
+       # Your data population code here
+   ```
+
+2. **Prefer fixtures over data migrations**:
+   - Data migrations: Use only for schema-dependent data (foreign keys, etc.)
+   - Fixtures: Use for initial production data that doesn't depend on complex logic
+   - Management commands: Best for production data seeding (explicit, controllable)
+
+3. **Why this matters**:
+   - Tests expect isolated, empty databases
+   - Pre-populated data breaks test assertions that count records
+   - Analytics tests perform global queries expecting only test-created data
+   - Example failure: Test creates 3 stocks, migration adds 26, assertion `== 3` fails with `== 29`
+
+4. **Testing data migrations**:
+   - Verify migration respects environment checks
+   - Test that `ENVIRONMENT=TESTING` skips data population
+   - Confirm test database starts empty
+
+5. **Example - See `scanner/migrations/0003_populate_curated_stocks.py`**:
+   - Good: Checks both connection alias AND environment setting
+   - Good: Returns early without side effects in test environment
+   - Good: Preserves production behavior while maintaining test isolation
+
 ## Code Conventions
 
 - Custom QuerySets defined in `managers.py` files within each app

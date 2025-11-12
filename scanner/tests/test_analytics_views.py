@@ -71,9 +71,9 @@ class TestAnalyticsView:
         response = client.get(url)
 
         assert response.status_code == 200
-        assert 'portfolio_analytics' in response.context
+        assert 'analytics' in response.context
         assert 'chart_data_json' in response.context
-        assert response.context['portfolio_analytics']['total_stocks'] == 1
+        assert response.context['analytics']['total_stocks'] == 1
 
     def test_analytics_view_with_no_data(self, client, authenticated_user):
         """Test analytics view with no stocks."""
@@ -81,8 +81,8 @@ class TestAnalyticsView:
         response = client.get(url)
 
         assert response.status_code == 200
-        assert response.context['portfolio_analytics']['total_stocks'] == 0
-        assert response.context['portfolio_analytics']['stocks_with_history'] == 0
+        assert response.context['analytics']['total_stocks'] == 0
+        assert response.context['analytics']['stocks_with_history'] == 0
 
     def test_analytics_view_chart_data_json_format(self, client, authenticated_user):
         """Test analytics view chart data is valid JSON."""
@@ -140,7 +140,7 @@ class TestAnalyticsView:
         response = client.get(url)
 
         assert response.status_code == 200
-        portfolio = response.context['portfolio_analytics']
+        portfolio = response.context['analytics']
         assert portfolio['total_stocks'] == 3
         assert len(portfolio['stock_analytics']) == 3
 
@@ -255,12 +255,15 @@ class TestStockHistoryViewEnhancements:
         response = client.get(url)
 
         assert response.status_code == 200
-        assert 'highest_iv' in response.context
-        assert 'lowest_iv' in response.context
-        assert 'average_iv' in response.context
+        assert 'quick_stats' in response.context
 
-        assert response.context['highest_iv'] == Decimal("160.00")
-        assert response.context['lowest_iv'] == Decimal("140.00")
+        quick_stats = response.context['quick_stats']
+        assert 'highest_iv' in quick_stats
+        assert 'lowest_iv' in quick_stats
+        assert 'average_iv' in quick_stats
+
+        assert quick_stats['highest_iv'] == Decimal("160.00")
+        assert quick_stats['lowest_iv'] == Decimal("140.00")
 
 
 @pytest.mark.django_db
@@ -441,7 +444,7 @@ class TestChartDataValidation:
         response = client.get(url)
 
         assert response.status_code == 200
-        portfolio = response.context['portfolio_analytics']
+        portfolio = response.context['analytics']
         assert portfolio['total_stocks'] == 2
         assert portfolio['stocks_with_history'] == 1
 

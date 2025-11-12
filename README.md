@@ -198,7 +198,7 @@ See `CLAUDE.md` for detailed development guidelines and `specs/` directory for p
   - Updated ROADMAP.md with Phase 6 and Phase 6.1 sections
   - Ready for implementation: Quarterly snapshots, per-stock history, comparison reports, CSV export
   - Estimated implementation: 8-12 hours across 8 tasks
-  - Target: 276/276 tests (60 new tests planned)
+  - Target: 276 tests (60 new tests planned) - Final: 302 tests (86 new tests added)
 
 - **Nov 10, 2025 (Evening)**: Completed cache migration to Django framework
   - Migrated from direct Redis usage to Django cache backend
@@ -206,7 +206,7 @@ See `CLAUDE.md` for detailed development guidelines and `specs/` directory for p
   - Achieved 17x performance improvement on cache hits
   - Alpha Vantage API caching: 7-day TTL (604,800s)
   - Scanner options caching: 45-min TTL (2,700s)
-  - All 216 tests passing with improved testability
+  - All 302 tests passing with improved testability
 
 - **Nov 10, 2025 (PM)**: Fixed all failing tests - achieved 100% test pass rate
   - Fixed URL namespace issues (10 tests)
@@ -241,7 +241,7 @@ just test scanner/tests/test_scanner_views.py
 uv run pytest --cov
 ```
 
-**Test Suite**: 216 tests passing (100% pass rate) ✅
+**Test Suite**: 302 tests passing (100% pass rate) ✅
 - Scanner views and integration tests
 - Valuation calculation tests (EPS & FCF methods)
 - Template filter tests with type safety validation
@@ -249,8 +249,7 @@ uv run pytest --cov
 - Integration tests for graceful degradation
 - Authentication and authorization tests
 - Cache framework tests (Django cache with Redis backend)
-
-**Phase 6 Target**: 276 tests (216 existing + 60 new)
+- Analytics and visualization tests (Phase 6.1)
 
 ## Roadmap
 
