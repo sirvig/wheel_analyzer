@@ -270,8 +270,8 @@ def calculate_sensitivity(
                 current_fcf_per_share=stock.current_fcf_per_share,
                 fcf_growth_rate=stock.fcf_growth_rate,
                 fcf_multiple=stock.fcf_multiple,
-                desired_return=stock.desired_return_fcf,
-                projection_years=stock.projection_years_fcf,
+                desired_return=stock.desired_return,
+                projection_years=stock.projection_years,
             )
             original_iv = float(original_result["intrinsic_value"])
 
@@ -282,17 +282,17 @@ def calculate_sensitivity(
                     current_fcf_per_share=stock.current_fcf_per_share,
                     fcf_growth_rate=adjusted_rate,
                     fcf_multiple=stock.fcf_multiple,
-                    desired_return=stock.desired_return_fcf,
-                    projection_years=stock.projection_years_fcf,
+                    desired_return=stock.desired_return,
+                    projection_years=stock.projection_years,
                 )
             elif assumption == "discount_rate":
-                adjusted_rate = stock.desired_return_fcf + Decimal(str(delta * 100))
+                adjusted_rate = stock.desired_return + Decimal(str(delta * 100))
                 adjusted_result = calculate_intrinsic_value_fcf(
                     current_fcf_per_share=stock.current_fcf_per_share,
                     fcf_growth_rate=stock.fcf_growth_rate,
                     fcf_multiple=stock.fcf_multiple,
                     desired_return=adjusted_rate,
-                    projection_years=stock.projection_years_fcf,
+                    projection_years=stock.projection_years,
                 )
             else:
                 return {
@@ -323,7 +323,8 @@ def calculate_sensitivity(
         }
 
     except Exception as e:
-        logger.error(f"Sensitivity calculation error for {stock.symbol}: {e}")
+        # Log detailed exception server-side for debugging
+        logger.error(f"Sensitivity calculation error for {stock.symbol}: {e}", exc_info=True)
         return {
             "original_iv": None,
             "adjusted_iv": None,
@@ -331,11 +332,11 @@ def calculate_sensitivity(
             "assumption": assumption,
             "delta": delta,
             "method": method,
-            "error": str(e),
+            "error": "Calculation failed",  # Generic message for users
         }
 
 
-def get_stock_analytics(symbol: str) -> Dict[str, Any]:
+def get_stock_analytics(symbol: str, prefetched_history=None) -> Dict[str, Any]:
     """
     Get comprehensive analytics for a single stock.
 
@@ -367,9 +368,15 @@ def get_stock_analytics(symbol: str) -> Dict[str, Any]:
     stock = CuratedStock.objects.get(symbol=symbol)
 
     # Get historical data ordered by date
-    history = ValuationHistory.objects.filter(stock=stock).order_by("snapshot_date")
+    # Use prefetched history if available, otherwise fetch from database
+    if prefetched_history is not None:
+        history = prefetched_history
+    else:
+        history = ValuationHistory.objects.filter(stock=stock).order_by("snapshot_date")
 
-    if not history.exists():
+    # Check if history has data (works for both QuerySet and list)
+    has_history = len(history) > 0 if isinstance(history, list) else history.exists()
+    if not has_history:
         return {
             "symbol": symbol,
             "data_points": 0,
@@ -430,7 +437,7 @@ def get_stock_analytics(symbol: str) -> Dict[str, Any]:
     correlation = calculate_correlation(eps_values, fcf_values)
 
     # Get latest values
-    latest = history.last()
+    latest = history[-1] if isinstance(history, list) else history.last()
     latest_eps_iv = float(latest.intrinsic_value) if latest.intrinsic_value else None
     latest_fcf_iv = float(latest.intrinsic_value_fcf) if latest.intrinsic_value_fcf else None
 
@@ -444,7 +451,7 @@ def get_stock_analytics(symbol: str) -> Dict[str, Any]:
 
     return {
         "symbol": symbol,
-        "data_points": history.count(),
+        "data_points": len(history) if isinstance(history, list) else history.count(),
         "eps_volatility": eps_volatility,
         "fcf_volatility": fcf_volatility,
         "effective_volatility": effective_volatility,
@@ -479,7 +486,7 @@ def get_portfolio_analytics() -> Dict[str, Any]:
                 - average_cagr: Mean CAGR across stocks
             - stock_analytics: List of per-stock analytics dictionaries
     """
-    active_stocks = CuratedStock.objects.filter(active=True)
+    active_stocks = CuratedStock.objects.filter(active=True).prefetch_related("valuation_history")
     total_stocks = active_stocks.count()
 
     # Get analytics for each stock
@@ -488,12 +495,15 @@ def get_portfolio_analytics() -> Dict[str, Any]:
 
     for stock in active_stocks:
         try:
-            analytics = get_stock_analytics(stock.symbol)
+            # Use prefetched valuation history to avoid N+1 query
+            prefetched_history = list(stock.valuation_history.all().order_by("snapshot_date"))
+            analytics = get_stock_analytics(stock.symbol, prefetched_history=prefetched_history)
             if analytics["data_points"] > 0:
                 stock_analytics_list.append(analytics)
                 stocks_with_history += 1
         except Exception as e:
-            logger.warning(f"Error getting analytics for {stock.symbol}: {e}")
+            # Log detailed exception server-side with full traceback
+            logger.warning(f"Failed to calculate analytics for {stock.symbol}", exc_info=True)
             continue
 
     # Calculate portfolio-wide statistics

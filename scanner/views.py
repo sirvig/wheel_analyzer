@@ -11,11 +11,24 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
+from django.views.decorators.cache import cache_page
+from django_ratelimit.decorators import ratelimit
 from scanner.analytics import get_portfolio_analytics, get_stock_analytics
 from scanner.models import CuratedStock, ValuationHistory
 from scanner.scanner import perform_scan
 
 logger = logging.getLogger(__name__)
+
+
+
+# Rate limiting and caching helpers
+def conditionally_cache(timeout):
+    """Apply cache_page decorator only in non-test environments."""
+    def decorator(view_func):
+        if settings.ENVIRONMENT != "TESTING":
+            return cache_page(timeout)(view_func)
+        return view_func
+    return decorator
 
 SCAN_LOCK_KEY = "scan_in_progress"
 SCAN_LOCK_TIMEOUT = 600  # 10 minutes
@@ -313,6 +326,8 @@ def valuation_list_view(request):
 
 
 @login_required
+@ratelimit(key='user', rate='10/m', method='GET')
+@conditionally_cache(60 * 5)  # 5-minute view cache (disabled in tests)
 def stock_history_view(request, symbol):
     """
     Display valuation history for a single stock.
@@ -432,7 +447,7 @@ def stock_history_view(request, symbol):
         'history': history,
         'has_history': history.exists(),
         'analytics': stock_analytics,
-        'chart_data_json': json.dumps(chart_data) if chart_data else None,
+        'chart_data_json': json.dumps(chart_data, ensure_ascii=True) if chart_data else None,
         'quick_stats': quick_stats,
     }
 
@@ -440,6 +455,8 @@ def stock_history_view(request, symbol):
 
 
 @login_required
+@ratelimit(key='user', rate='10/m', method='GET')
+@conditionally_cache(60 * 5)  # 5-minute view cache (disabled in tests)
 def valuation_comparison_view(request):
     """
     Display comparison report of current vs. historical valuations.
@@ -541,7 +558,7 @@ def valuation_comparison_view(request):
         'stocks': comparison_data,
         'comparison_date_quarter': previous_quarter_date,
         'comparison_date_year': year_ago_date,
-        'chart_data_json': json.dumps(chart_data),
+        'chart_data_json': json.dumps(chart_data, ensure_ascii=True),
     }
 
     return render(request, 'scanner/valuation_comparison.html', context)
@@ -689,6 +706,8 @@ def _generate_chart_color(index: int) -> str:
 
 
 @login_required
+@ratelimit(key='user', rate='10/m', method='GET')
+@conditionally_cache(60 * 5)  # 5-minute view cache (disabled in tests)
 def analytics_view(request):
     """
     Display comprehensive analytics dashboard with portfolio metrics and trends.
@@ -760,7 +779,7 @@ def analytics_view(request):
 
     context = {
         'analytics': portfolio_analytics,
-        'chart_data_json': json.dumps(chart_data),
+        'chart_data_json': json.dumps(chart_data, ensure_ascii=True),
         'date_range': 'All Time',
     }
 

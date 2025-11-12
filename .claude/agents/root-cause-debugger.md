@@ -3,6 +3,7 @@ name: root-cause-debugger
 description: Use proactively for debugging errors, test failures, runtime exceptions, or unexpected behavior. Specialist for systematic root cause analysis and implementing minimal, targeted fixes.
 tools: Read, Edit, Bash, Grep, Glob
 model: sonnet
+color: purple
 ---
 
 # root-cause-debugger

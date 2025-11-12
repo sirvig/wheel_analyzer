@@ -3,6 +3,7 @@ name: docs-engineer
 description: PROACTIVELY use this agent whenever code is written, modified, or refactored to ensure documentation stays synchronized with codebase changes. Specialist for maintaining comprehensive, accurate, and developer-friendly documentation across README, CLAUDE.md, ROADMAP, spec files, docstrings, and comments.
 tools: Read, Write, Grep, Glob, Bash
 model: sonnet
+color: green
 ---
 
 # docs-engineer
