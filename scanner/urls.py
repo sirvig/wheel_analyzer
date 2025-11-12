@@ -15,4 +15,8 @@ urlpatterns = [
     path("scan/", views.scan_view, name="scan"),
     path("scan-status/", views.scan_status, name="scan_status"),
     path("options/<str:ticker>", views.options_list, name="options_list"),
+    # Individual stock search
+    path("search/", views.individual_search_view, name="search"),
+    path("search/scan/", views.individual_scan_view, name="individual_scan"),
+    path("search/status/", views.individual_scan_status_view, name="individual_scan_status"),
 ]

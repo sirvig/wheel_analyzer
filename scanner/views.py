@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.cache import cache_page
 from django_ratelimit.decorators import ratelimit
 from scanner.analytics import get_portfolio_analytics, get_stock_analytics
+from scanner.forms import IndividualStockScanForm
 from scanner.models import CuratedStock, ValuationHistory
 from scanner.scanner import perform_scan
 
@@ -786,3 +787,218 @@ def analytics_view(request):
     logger.info(f"Analytics page accessed by {request.user.username}")
 
     return render(request, 'scanner/analytics.html', context)
+
+
+# ===== Individual Stock Search Views =====
+
+
+def run_individual_scan_in_background(user_id, ticker, option_type, weeks):
+    """
+    Execute individual stock scan in background thread.
+
+    Args:
+        user_id: User ID for cache key scoping
+        ticker: Stock ticker symbol (uppercase)
+        option_type: 'put' or 'call'
+        weeks: Number of weeks to scan (1-52)
+
+    Stores results in user-specific cache keys.
+    """
+    from scanner.marketdata.options import find_options
+
+    try:
+        logger.info(f"Individual scan started for user {user_id}: {ticker} {option_type}s")
+
+        # Set status
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_status:{user_id}",
+            f"Scanning {ticker} for {option_type} options...",
+            timeout=600,
+        )
+
+        # Allow scans outside market hours in LOCAL environment
+        debug_mode = settings.ENVIRONMENT == "LOCAL"
+
+        # Call find_options (reuse existing logic)
+        options = find_options(ticker, option_type, weeks, debug_mode)
+
+        # Check if stock is in curated list for IV comparison
+        try:
+            curated_stock = CuratedStock.objects.get(symbol=ticker, active=True)
+            has_intrinsic_value = True
+        except CuratedStock.DoesNotExist:
+            curated_stock = None
+            has_intrinsic_value = False
+
+        # Store results
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_results:{user_id}",
+            {
+                'ticker': ticker,
+                'option_type': option_type,
+                'options': options,
+                'curated_stock': curated_stock,
+                'has_intrinsic_value': has_intrinsic_value,
+                'timestamp': timestamp,
+            },
+            timeout=600,
+        )
+
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_status:{user_id}",
+            f"Scan completed at {timestamp}. Found {len(options)} options.",
+            timeout=600,
+        )
+
+        logger.info(f"Individual scan completed for user {user_id}: {ticker} - {len(options)} options found")
+
+    except Exception as e:
+        logger.error(f"Error during individual scan for user {user_id}: {e}", exc_info=True)
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_status:{user_id}",
+            f"Error scanning {ticker}: {str(e)}",
+            timeout=600,
+        )
+
+    finally:
+        # Release lock
+        cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_lock:{user_id}")
+        logger.debug(f"Individual scan lock released for user {user_id}")
+
+
+@login_required
+def individual_search_view(request):
+    """
+    Display individual stock search form.
+
+    Returns:
+        Rendered scanner/search.html template with form
+    """
+    form = IndividualStockScanForm()
+
+    context = {
+        'form': form,
+        'is_local_environment': settings.ENVIRONMENT == "LOCAL",
+    }
+
+    return render(request, 'scanner/search.html', context)
+
+
+@login_required
+@require_POST
+def individual_scan_view(request):
+    """
+    Trigger individual stock scan in background.
+
+    Validates form, starts background thread, returns polling partial.
+
+    Returns:
+        HTMX partial: search_polling.html or form with errors
+    """
+    form = IndividualStockScanForm(request.POST)
+
+    if not form.is_valid():
+        # Return form with validation errors
+        context = {
+            'form': form,
+            'is_local_environment': settings.ENVIRONMENT == "LOCAL",
+        }
+        return render(request, 'scanner/search.html', context)
+
+    ticker = form.cleaned_data['ticker']
+    option_type = form.cleaned_data['option_type']
+    weeks = form.cleaned_data.get('weeks', 4)
+
+    user_id = request.user.id
+    lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_lock:{user_id}"
+
+    # Check if scan already in progress for this user
+    if cache.get(lock_key):
+        logger.info(f"Scan already in progress for user {user_id}")
+        context = _get_individual_scan_context(user_id)
+        return render(request, 'scanner/partials/search_polling.html', context)
+
+    # Set lock
+    cache.set(lock_key, True, timeout=600)
+
+    # Store scan metadata for polling
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_ticker:{user_id}",
+        ticker,
+        timeout=600,
+    )
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_type:{user_id}",
+        option_type,
+        timeout=600,
+    )
+
+    logger.info(f"Starting individual scan for user {user_id}: {ticker} {option_type}s")
+
+    # Start background thread
+    scan_thread = threading.Thread(
+        target=run_individual_scan_in_background,
+        args=(user_id, ticker, option_type, weeks),
+        daemon=True,
+    )
+    scan_thread.start()
+
+    # Return polling partial
+    context = _get_individual_scan_context(user_id)
+    return render(request, 'scanner/partials/search_polling.html', context)
+
+
+@login_required
+def individual_scan_status_view(request):
+    """
+    Polling endpoint for individual scan progress.
+
+    Returns:
+        - search_polling.html if scan in progress
+        - search_results.html if scan complete
+    """
+    user_id = request.user.id
+    lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_lock:{user_id}"
+
+    context = _get_individual_scan_context(user_id)
+
+    if cache.get(lock_key):
+        # Scan still in progress
+        logger.debug(f"Individual scan status check for user {user_id}: in progress")
+        return render(request, 'scanner/partials/search_polling.html', context)
+    else:
+        # Scan complete
+        logger.debug(f"Individual scan status check for user {user_id}: complete")
+        return render(request, 'scanner/partials/search_results.html', context)
+
+
+def _get_individual_scan_context(user_id):
+    """
+    Helper to fetch individual scan context from cache.
+
+    Args:
+        user_id: User ID for cache key scoping
+
+    Returns:
+        dict: Context with ticker, option_type, status, results
+    """
+    prefix = settings.CACHE_KEY_PREFIX_SCANNER
+
+    results = cache.get(f"{prefix}:individual_scan_results:{user_id}")
+    status = cache.get(f"{prefix}:individual_scan_status:{user_id}", "Initializing scan...")
+    ticker = cache.get(f"{prefix}:individual_scan_ticker:{user_id}", "")
+    option_type = cache.get(f"{prefix}:individual_scan_type:{user_id}", "")
+
+    context = {
+        'ticker': ticker,
+        'option_type': option_type,
+        'status': status,
+        'is_local_environment': settings.ENVIRONMENT == "LOCAL",
+    }
+
+    if results:
+        context.update(results)
+
+    return context
