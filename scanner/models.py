@@ -129,6 +129,172 @@ class CuratedStock(models.Model):
         verbose_name_plural = "Curated Stocks"
 
 
+class ValuationHistory(models.Model):
+    """
+    Historical record of quarterly valuation calculations for curated stocks.
+
+    Stores quarterly snapshots (Jan 1, Apr 1, Jul 1, Oct 1) of intrinsic value
+    calculations along with the DCF assumptions used at that time. This enables
+    historical trend analysis and comparison of valuations over time.
+
+    Design decisions:
+    - Quarterly snapshots balance data granularity with storage efficiency
+    - Store both EPS and FCF calculations for consistency with current model
+    - Capture all DCF assumptions for reproducibility and assumption tracking
+    - Never auto-delete (indefinite retention)
+    - Foreign key to CuratedStock with CASCADE (if stock deleted, history deleted)
+    """
+
+    # Relationships
+    stock = models.ForeignKey(
+        'CuratedStock',
+        on_delete=models.CASCADE,
+        related_name='valuation_history',
+        help_text="The stock this valuation history belongs to"
+    )
+
+    # Snapshot Metadata
+    snapshot_date = models.DateField(
+        db_index=True,  # Index for efficient date-range queries
+        help_text="Quarter-end date when this snapshot was taken (Jan 1, Apr 1, Jul 1, Oct 1)"
+    )
+
+    calculated_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when this snapshot was created (may differ from snapshot_date)"
+    )
+
+    # EPS Valuation Results
+    intrinsic_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Intrinsic value calculated using EPS DCF model"
+    )
+
+    current_eps = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Trailing Twelve Months EPS at time of snapshot"
+    )
+
+    eps_growth_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="EPS growth rate assumption (%) used in calculation"
+    )
+
+    eps_multiple = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="Terminal value multiple applied to Year 5 EPS"
+    )
+
+    # FCF Valuation Results
+    intrinsic_value_fcf = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Intrinsic value calculated using FCF DCF model"
+    )
+
+    current_fcf_per_share = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Trailing Twelve Months FCF per share at time of snapshot"
+    )
+
+    fcf_growth_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="FCF growth rate assumption (%) used in calculation"
+    )
+
+    fcf_multiple = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="Terminal value multiple applied to Year 5 FCF"
+    )
+
+    # Shared DCF Assumptions
+    desired_return = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="Desired annual return rate (%) used as discount rate"
+    )
+
+    projection_years = models.IntegerField(
+        help_text="Number of years projected in DCF model"
+    )
+
+    # Valuation Method Preference
+    preferred_valuation_method = models.CharField(
+        max_length=3,
+        choices=[
+            ("EPS", "EPS-based"),
+            ("FCF", "FCF-based"),
+        ],
+        default="EPS",
+        help_text="Preferred valuation method at time of snapshot"
+    )
+
+    # Notes
+    notes = models.TextField(
+        blank=True,
+        help_text="Optional notes about this valuation snapshot (e.g., assumption changes)"
+    )
+
+    class Meta:
+        ordering = ['-snapshot_date', 'stock__symbol']
+        verbose_name = "Valuation History"
+        verbose_name_plural = "Valuation Histories"
+        indexes = [
+            models.Index(fields=['stock', '-snapshot_date']),  # Per-stock queries
+            models.Index(fields=['snapshot_date']),  # Quarterly queries
+            models.Index(fields=['stock', 'snapshot_date']),  # Unique constraint support
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['stock', 'snapshot_date'],
+                name='unique_stock_snapshot_date',
+                violation_error_message="A valuation snapshot already exists for this stock and date."
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.stock.symbol} - {self.snapshot_date}"
+
+    def get_effective_intrinsic_value(self):
+        """
+        Get the intrinsic value based on the preferred valuation method.
+
+        Returns:
+            Decimal or None: The intrinsic value for the preferred method.
+        """
+        if self.preferred_valuation_method == "FCF":
+            return self.intrinsic_value_fcf
+        else:
+            return self.intrinsic_value
+
+    @property
+    def quarter_label(self):
+        """
+        Return a human-readable quarter label (e.g., 'Q1 2025').
+
+        Returns:
+            str: Quarter label like 'Q1 2025', 'Q2 2025', etc.
+        """
+        quarter_map = {1: 'Q1', 4: 'Q2', 7: 'Q3', 10: 'Q4'}
+        quarter = quarter_map.get(self.snapshot_date.month, 'Q?')
+        return f"{quarter} {self.snapshot_date.year}"
+
+
 class OptionsWatch(models.Model):
     TYPE_CHOICES = (
         ("put", "Put"),

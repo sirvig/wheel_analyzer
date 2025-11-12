@@ -1,14 +1,16 @@
+import csv
 import logging
 import threading
-from datetime import datetime
+from datetime import date, datetime
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.shortcuts import render
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
-from scanner.models import CuratedStock
+from scanner.models import CuratedStock, ValuationHistory
 from scanner.scanner import perform_scan
 
 logger = logging.getLogger(__name__)
@@ -306,3 +308,219 @@ def valuation_list_view(request):
     }
 
     return render(request, "scanner/valuations.html", context)
+
+
+@login_required
+def stock_history_view(request, symbol):
+    """
+    Display valuation history for a single stock.
+
+    Shows quarterly snapshots with trend visualization and assumption tracking.
+
+    Args:
+        symbol: Stock ticker symbol
+
+    Returns:
+        Rendered scanner/stock_history.html template
+
+    Context:
+        stock: CuratedStock instance
+        history: QuerySet of ValuationHistory ordered by date descending
+        has_history: Boolean indicating if any snapshots exist
+    """
+    # Get stock
+    stock = get_object_or_404(CuratedStock, symbol=symbol.upper(), active=True)
+
+    # Get history ordered by date (newest first)
+    history = ValuationHistory.objects.filter(stock=stock).order_by('-snapshot_date')
+
+    logger.info(f"Stock history view accessed by {request.user.username} for {symbol}")
+    logger.debug(f"Found {history.count()} historical snapshots for {symbol}")
+
+    context = {
+        'stock': stock,
+        'history': history,
+        'has_history': history.exists(),
+    }
+
+    return render(request, 'scanner/stock_history.html', context)
+
+
+@login_required
+def valuation_comparison_view(request):
+    """
+    Display comparison report of current vs. historical valuations.
+
+    Compares current intrinsic values to previous quarter and year-ago snapshots.
+
+    Returns:
+        Rendered scanner/valuation_comparison.html template
+
+    Context:
+        stocks: List of dictionaries with comparison data per stock
+        comparison_date_quarter: Date of previous quarter snapshot
+        comparison_date_year: Date of year-ago snapshot
+    """
+    # Determine comparison dates
+    today = date.today()
+    previous_quarter_date = _get_previous_quarter_date(today)
+    year_ago_date = _get_year_ago_quarter_date(today)
+
+    # Get all active stocks with current valuations
+    stocks = CuratedStock.objects.filter(active=True).order_by('symbol')
+
+    comparison_data = []
+    for stock in stocks:
+        # Get historical snapshots
+        quarter_snapshot = ValuationHistory.objects.filter(
+            stock=stock,
+            snapshot_date=previous_quarter_date
+        ).first()
+
+        year_snapshot = ValuationHistory.objects.filter(
+            stock=stock,
+            snapshot_date=year_ago_date
+        ).first()
+
+        # Calculate deltas
+        current_value = stock.get_effective_intrinsic_value()
+        quarter_value = quarter_snapshot.get_effective_intrinsic_value() if quarter_snapshot else None
+        year_value = year_snapshot.get_effective_intrinsic_value() if year_snapshot else None
+
+        quarter_delta = None
+        quarter_pct = None
+        if current_value and quarter_value:
+            quarter_delta = current_value - quarter_value
+            quarter_pct = (quarter_delta / quarter_value) * 100
+
+        year_delta = None
+        year_pct = None
+        if current_value and year_value:
+            year_delta = current_value - year_value
+            year_pct = (year_delta / year_value) * 100
+
+        comparison_data.append({
+            'stock': stock,
+            'current_value': current_value,
+            'quarter_value': quarter_value,
+            'quarter_delta': quarter_delta,
+            'quarter_pct': quarter_pct,
+            'year_value': year_value,
+            'year_delta': year_delta,
+            'year_pct': year_pct,
+        })
+
+    logger.info(f"Valuation comparison view accessed by {request.user.username}")
+    logger.debug(f"Comparing {len(comparison_data)} stocks")
+
+    context = {
+        'stocks': comparison_data,
+        'comparison_date_quarter': previous_quarter_date,
+        'comparison_date_year': year_ago_date,
+    }
+
+    return render(request, 'scanner/valuation_comparison.html', context)
+
+
+def _get_previous_quarter_date(today):
+    """Get the previous quarter snapshot date."""
+    year = today.year
+    month = today.month
+
+    if month < 4:
+        return date(year - 1, 10, 1)
+    elif month < 7:
+        return date(year, 1, 1)
+    elif month < 10:
+        return date(year, 4, 1)
+    else:
+        return date(year, 7, 1)
+
+
+def _get_year_ago_quarter_date(today):
+    """Get the snapshot date from one year ago (same quarter)."""
+    year = today.year - 1
+    month = today.month
+
+    if month < 4:
+        return date(year, 1, 1)
+    elif month < 7:
+        return date(year, 4, 1)
+    elif month < 10:
+        return date(year, 7, 1)
+    else:
+        return date(year, 10, 1)
+
+
+@login_required
+def export_valuation_history_csv(request, symbol=None):
+    """
+    Export valuation history to CSV.
+
+    Args:
+        symbol: Optional stock symbol. If None, exports all stocks.
+
+    Returns:
+        CSV file download
+    """
+    # Build filename
+    if symbol:
+        filename = f"valuation_history_{symbol.upper()}_{date.today().isoformat()}.csv"
+        stocks = CuratedStock.objects.filter(symbol=symbol.upper(), active=True)
+    else:
+        filename = f"valuation_history_all_{date.today().isoformat()}.csv"
+        stocks = CuratedStock.objects.filter(active=True)
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+
+    # Write header
+    writer.writerow([
+        'Symbol',
+        'Quarter',
+        'Snapshot Date',
+        'Calculated At',
+        'Intrinsic Value (EPS)',
+        'Current EPS',
+        'EPS Growth Rate (%)',
+        'EPS Multiple',
+        'Intrinsic Value (FCF)',
+        'Current FCF/Share',
+        'FCF Growth Rate (%)',
+        'FCF Multiple',
+        'Desired Return (%)',
+        'Projection Years',
+        'Preferred Method',
+        'Notes',
+    ])
+
+    # Write data rows
+    for stock in stocks:
+        history = ValuationHistory.objects.filter(stock=stock).order_by('-snapshot_date')
+
+        for snapshot in history:
+            writer.writerow([
+                stock.symbol,
+                snapshot.quarter_label,
+                snapshot.snapshot_date.isoformat(),
+                snapshot.calculated_at.strftime('%Y-%m-%d %H:%M:%S'),
+                snapshot.intrinsic_value,
+                snapshot.current_eps,
+                snapshot.eps_growth_rate,
+                snapshot.eps_multiple,
+                snapshot.intrinsic_value_fcf,
+                snapshot.current_fcf_per_share,
+                snapshot.fcf_growth_rate,
+                snapshot.fcf_multiple,
+                snapshot.desired_return,
+                snapshot.projection_years,
+                snapshot.preferred_valuation_method,
+                snapshot.notes,
+            ])
+
+    logger.info(f"CSV export requested by {request.user.username} for symbol={symbol}")
+
+    return response

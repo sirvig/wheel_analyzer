@@ -5,10 +5,30 @@
 <div class="container mx-auto mt-4">
   {# Page header #}
   <div class="mb-6">
-    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Stock Valuations</h1>
-    <p class="text-gray-600 dark:text-gray-400 mt-2">
-      Intrinsic value calculations for {{ stocks.count }} active curated stock{{ stocks.count|pluralize }}
-    </p>
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Stock Valuations</h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-2">
+          Intrinsic value calculations for {{ stocks.count }} active curated stock{{ stocks.count|pluralize }}
+        </p>
+      </div>
+      <div class="flex gap-3">
+        <a href="{% url 'scanner:valuation_comparison' %}"
+           class="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+          Comparison Report
+        </a>
+        <a href="{% url 'scanner:export_all_history' %}"
+           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          Export All CSV
+        </a>
+      </div>
+    </div>
   </div>
   
   {# Valuation table #}
@@ -24,6 +44,7 @@
             <th scope="col" class="px-6 py-3">Preferred</th>
             <th scope="col" class="px-6 py-3">Last Calc</th>
             <th scope="col" class="px-6 py-3">Assumptions</th>
+            <th scope="col" class="px-6 py-3">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -92,6 +113,17 @@
                   <span class="text-gray-400">-</span>
                 {% endif %}
                 <div>Return: {{ stock.desired_return|floatformat:0 }}%</div>
+              </td>
+
+              {# Actions #}
+              <td class="px-6 py-4">
+                <a href="{% url 'scanner:stock_history' stock.symbol %}"
+                   class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50">
+                  <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  View History
+                </a>
               </td>
             </tr>
           {% endfor %}

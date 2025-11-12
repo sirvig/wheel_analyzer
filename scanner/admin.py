@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CuratedStock, OptionsWatch
+from .models import CuratedStock, OptionsWatch, ValuationHistory
 
 
 @admin.register(CuratedStock)
@@ -76,6 +76,65 @@ class CuratedStockAdmin(admin.ModelAdmin):
             {
                 "fields": ("created_at", "updated_at"),
                 "classes": ("collapse",),
+            },
+        ),
+    )
+
+
+@admin.register(ValuationHistory)
+class ValuationHistoryAdmin(admin.ModelAdmin):
+    list_display = [
+        "stock",
+        "quarter_label",
+        "snapshot_date",
+        "intrinsic_value",
+        "intrinsic_value_fcf",
+        "preferred_valuation_method",
+        "calculated_at",
+    ]
+    list_filter = ["snapshot_date", "preferred_valuation_method", "stock"]
+    search_fields = ["stock__symbol", "notes"]
+    ordering = ["-snapshot_date", "stock__symbol"]
+    readonly_fields = ["calculated_at"]
+    date_hierarchy = "snapshot_date"
+
+    fieldsets = (
+        (
+            "Snapshot Information",
+            {
+                "fields": ("stock", "snapshot_date", "calculated_at", "notes")
+            },
+        ),
+        (
+            "EPS Valuation Results",
+            {
+                "fields": (
+                    "intrinsic_value",
+                    "current_eps",
+                    "eps_growth_rate",
+                    "eps_multiple",
+                )
+            },
+        ),
+        (
+            "FCF Valuation Results",
+            {
+                "fields": (
+                    "intrinsic_value_fcf",
+                    "current_fcf_per_share",
+                    "fcf_growth_rate",
+                    "fcf_multiple",
+                )
+            },
+        ),
+        (
+            "Shared DCF Assumptions",
+            {
+                "fields": (
+                    "desired_return",
+                    "projection_years",
+                    "preferred_valuation_method",
+                )
             },
         ),
     )
