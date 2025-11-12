@@ -294,16 +294,151 @@ See `specs/phase-6.1-visualizations-analytics.md` for complete specifications.
 
 ### Phase 7: Individual Stock Options Scanning
 
+**Status**: ✅ Completed
+
+**Specification**: `specs/phase-7-individual-stock-scanning.md`
+
+**Summary**:
+Successfully implemented individual stock options scanning feature, allowing users to search for options on any stock ticker through a dedicated web interface. Users can enter a ticker symbol, select option type (put or call), and trigger an on-demand scan that returns qualifying options (≥30% annualized return, |delta| < 0.20).
+
+**Key Achievements**:
+- **Django Form with Validation** (`scanner/forms.py` - 59 lines)
+  - `IndividualStockScanForm` with alphanumeric ticker validation
+  - Automatic ticker normalization (uppercase conversion)
+  - Option type selection (put/call radio buttons)
+  - Optional weeks field (1-52 range, default: 4)
+  - Tailwind CSS styling with dark mode support
+
+- **Background Scan Functionality** (`scanner/views.py` - 216 lines added)
+  - `run_individual_scan_in_background()` - Async scan execution
+  - User-specific cache key scoping for multi-user support
+  - Reuses existing `find_options()` logic from marketdata
+  - Conditional intrinsic value lookup for curated stocks
+  - Comprehensive error handling with structured logging
+
+- **View Functions** (4 new views)
+  - `individual_search_view()` - Display search form
+  - `individual_scan_view()` - Validate form and trigger scan
+  - `individual_scan_status_view()` - Polling endpoint for progress
+  - `_get_individual_scan_context()` - Cache data helper
+
+- **URL Routes** (`scanner/urls.py` - 3 new routes)
+  - `/scanner/search/` - Search form page
+  - `/scanner/search/scan/` - Scan trigger endpoint
+  - `/scanner/search/status/` - Polling status endpoint
+
+- **Templates** (3 new templates - 210 lines total)
+  - `search.html` - Main search form with HTMX integration
+  - `search_polling.html` - Animated progress indicator
+  - `search_results.html` - Results table with conditional IV badges
+
+- **Navigation** (`templates/scanner/index.html`)
+  - Added "Search Individual Stock" button (green) on scanner home
+
+**Technical Highlights**:
+- **Cache Strategy**: User-specific keys with 10-minute TTL
+  - `individual_scan_lock:{user_id}` - Prevents duplicate scans
+  - `individual_scan_results:{user_id}` - Stores scan results
+  - `individual_scan_status:{user_id}` - Progress messages
+- **HTMX Polling**: 5-second intervals for real-time updates
+- **Multi-User Support**: Isolated cache keys per user ID
+- **Market Hours**: Respects `ENVIRONMENT` setting (bypasses in LOCAL mode)
+- **IV Badges**: Conditional display for curated stocks
+  - ✓ Good (green) - Strike ≤ Intrinsic Value
+  - ✗ High (red) - Strike > Intrinsic Value
+  - ⚠ N/A (yellow) - Not in curated list
+
+**Test Results**:
+- **Total Tests**: 302 tests passing (100% pass rate) ✅
+- **New Tests Generated**: 37 tests (20 form + 17 integration)
+- **Linting**: All checks passed (ruff)
+
+**Security & Quality**:
+- **Security Audit**: 8 findings identified (2 High, 3 Medium, 2 Low, 1 Info)
+  - Rate limiting recommended for new endpoints
+  - Error message sanitization recommended
+  - All critical issues documented for follow-up
+- **Code Review**: Well-structured implementation following existing patterns
+  - Reuses background threading approach from curated scanner
+  - Proper error handling and cache management
+  - Some improvements identified for future iterations
+
+**Files Changed**: 7 files, 495 lines added
+- scanner/forms.py (new file - 59 lines)
+- scanner/views.py (+216 lines)
+- scanner/urls.py (+4 lines)
+- templates/scanner/search.html (new file - 108 lines)
+- templates/scanner/partials/search_polling.html (new file - 17 lines)
+- templates/scanner/partials/search_results.html (new file - 85 lines)
+- templates/scanner/index.html (+7 lines)
+
+**Known Limitations**:
+- No rate limiting on new endpoints (recommended for production)
+- No ticker allowlist validation (accepts any alphanumeric string)
+- Error messages could be more user-friendly
+- No saved searches functionality (deferred to Phase 7.1)
+
+**Next Steps**:
+- Phase 7.1: Save Searches (bookmark frequently scanned tickers)
+- Phase 7.2: Rate Limit Dashboard (API quota tracking and visualization)
+- Address HIGH security findings (rate limiting, error sanitization)
+- Consider Phase 8: Stock Price Integration for undervaluation analysis
+
+See `specs/phase-7-individual-stock-scanning.md` for complete specifications.
+
+### Phase 7.1: Save Searches
+
 **Status**: Not started
 
 **Summary**:
-Allow users to enter an individual stock ticker, select option type (put or call), and initiate a scan to return options that meet the criteria. Similar to the `find_options` management command functionality.
+Allow users to save and bookmark frequently searched tickers for quick access. This enhancement builds on Phase 7's individual stock scanning by enabling users to maintain a personalized watchlist of tickers they scan regularly.
 
-**Key Features**:
-- User input form for ticker symbol and option type selection
-- On-demand scanning for individual stocks (not limited to curated list)
-- Results display similar to primary scanner page
-- No intrinsic value comparison required (optional enhancement)
+**Planned Features**:
+- Database model for SavedSearch (user, ticker, option_type, created_at)
+- "Save Search" button on individual scan results page
+- Dedicated "My Saved Searches" page listing all bookmarked tickers
+- Quick-scan buttons for saved searches (one-click re-scan)
+- Edit/delete functionality for saved searches
+- Search organization (sorting by name, date added, scan frequency)
+- Optional: Search notes or tags for categorization
+
+**Technical Considerations**:
+- Many-to-one relationship: User → SavedSearch
+- Unique constraint on (user, ticker, option_type) to prevent duplicates
+- Index on user_id for fast query performance
+- Soft delete option for search history preservation
+- Integration with existing individual scan views and templates
+
+**Estimated Effort**: 3-4 tasks, 15-20 tests
+
+### Phase 7.2: Rate Limit Dashboard
+
+**Status**: Not started
+
+**Summary**:
+Provide transparency and control over API usage by displaying users' daily scan quotas and current usage. Prevents frustration from hitting limits and helps users plan their research activities.
+
+**Planned Features**:
+- Database model for ScanUsage tracking (user, scan_type, timestamp, ticker)
+- Dashboard page at `/scanner/usage/` showing:
+  - Daily scan count and quota limits (e.g., "7 of 25 scans used today")
+  - Progress bar visualization of quota usage
+  - Breakdown by scan type (curated list vs. individual searches)
+  - Historical usage chart (daily/weekly/monthly views)
+  - Quota reset countdown timer (resets at midnight ET)
+- Real-time quota checking before scan execution
+- Graceful error messages when quota exceeded
+- Optional: Email notifications at 80% and 100% usage thresholds
+
+**Technical Considerations**:
+- Increment counter on each individual scan (Phase 7 integration)
+- Rolling 24-hour window vs. daily reset strategy
+- Cache quota counts for performance (5-minute TTL)
+- Admin interface for adjusting per-user quotas
+- Consider separating quotas: individual scans vs. curated scans
+- API call tracking for Alpha Vantage and marketdata.app usage
+
+**Estimated Effort**: 4-5 tasks, 20-25 tests
 
 ### Phase 8: Stock Price Integration
 
