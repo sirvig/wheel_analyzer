@@ -69,7 +69,8 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
 
 **Development Context:**
 - See @reference/ROADMAP.md for current status and next steps
-- Task-based development workflow with numbered tasks in the `/tasks` directory
+- Spec-based development workflow with comprehensive specifications in the `/specs` directory
+- Use `/build specs/phase-N-description.md` to start implementation of a new phase
 
 ### Django Apps
 
@@ -237,8 +238,9 @@ The Django application can run locally while using Docker only for PostgreSQL an
 
 **Development Context:**
 - See @reference/ROADMAP.md for current status and next steps
-- Task-based development workflow with numbered tasks in `/tasks` directory
-- **Current Status**: Phase 5 completed ✅ with all bugs resolved and 100% test pass rate achieved. Cache migration completed ✅ (Tasks 030-034). Scanner fully functional and reliable with comprehensive error handling. Key achievements:
+- Spec-based development workflow with comprehensive specifications in `/specs` directory
+- Use `/build specs/phase-N-description.md` to start implementation of a new phase
+- **Current Status**: Phase 5 completed ✅ with all bugs resolved and 100% test pass rate achieved. Cache migration completed ✅. Scanner fully functional and reliable with comprehensive error handling. Key achievements:
   - Django cache framework properly configured with Redis backend
   - Alpha Vantage API responses cached for 7 days (17x faster on cache hits)
   - Scanner options data cached for 45 minutes
@@ -252,12 +254,13 @@ The Django application can run locally while using Docker only for PostgreSQL an
   - Good/Bad pills display correctly on all navigation paths
   - Fixed URL namespacing, template paths, authentication, mocks, and assertions
   - All pending bugs resolved ✅, all refactors completed ✅
-- **Next**: Begin Phase 6 (Historical Valuation Storage) - Implementation ready with 8 tasks (035-042):
+- **Next**: Begin Phase 6 (Historical Valuation Storage) - Implementation ready:
   - Quarterly snapshots of intrinsic value calculations (Jan 1, Apr 1, Jul 1, Oct 1)
   - Per-stock history pages with trend analysis
   - Comparison reports (current vs. previous quarter vs. year-ago)
   - CSV export for external analysis
   - Track complete DCF assumptions with each snapshot
-  - Comprehensive plan in `specs/phase-6-historical-valuations.md`
+  - Full specification in `specs/phase-6-historical-valuations.md`
+  - Start with: `/build specs/phase-6-historical-valuations.md`
   - Target: 276/276 tests (216 existing + 60 new)
   

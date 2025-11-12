@@ -128,9 +128,8 @@ wheel-analyzer/
 │   └── models.py         # User, Account, Campaign, Transaction
 ├── templates/            # Django templates
 ├── static/               # CSS, JS, images
-├── tasks/                # Development task files (001-042)
-├── specs/                # Implementation specifications
-└── reference/            # Documentation (ROADMAP, BUGS, REFACTORS)
+├── specs/                # Phase implementation specifications
+└── reference/            # Documentation (ROADMAP)
 ```
 
 ## API Integrations
@@ -149,12 +148,12 @@ wheel-analyzer/
 ## Development Workflow
 
 1. **Review Roadmap**: Check `reference/ROADMAP.md` for current phase
-2. **Create Task**: Add numbered task file in `/tasks` directory
-3. **Implement**: Follow task specifications
-4. **Test**: Run `just test` to verify changes
-5. **Document**: Update ROADMAP.md and reference files
+2. **Create Specification**: Add comprehensive spec file in `/specs` directory (format: `phase-N-description.md`)
+3. **Implement**: Use `/build specs/phase-N-description.md` to start implementation
+4. **Test**: Run `just test` frequently to verify changes
+5. **Document**: Update ROADMAP.md with completion status and key achievements
 
-See `CLAUDE.md` for detailed development guidelines.
+See `CLAUDE.md` for detailed development guidelines and `specs/` directory for phase specifications.
 
 ## Current Status
 
@@ -166,16 +165,21 @@ See `CLAUDE.md` for detailed development guidelines.
 - **100% test pass rate** - 216/216 tests passing ✅
 
 **Recent Updates**:
+- **Nov 12, 2025**: Workflow Restructuring
+  - Migrated from individual task files to comprehensive spec files
+  - Updated development workflow to use `/build` command with spec file arguments
+  - Simplified ROADMAP.md to reference spec files instead of individual tasks
+  - All documentation updated to reflect new spec-based workflow
+
 - **Nov 11, 2025**: Phase 6 Planning Complete
   - Created comprehensive implementation plan (`specs/phase-6-historical-valuations.md`)
   - Updated ROADMAP.md with Phase 6 and Phase 6.1 sections
-  - Created 8 task files (035-042) for historical valuation storage
   - Ready for implementation: Quarterly snapshots, per-stock history, comparison reports, CSV export
   - Estimated implementation: 8-12 hours across 8 tasks
   - Target: 276/276 tests (60 new tests planned)
 
 - **Nov 10, 2025 (Evening)**: Completed cache migration to Django framework
-  - Migrated from direct Redis usage to Django cache backend (Tasks 030-034)
+  - Migrated from direct Redis usage to Django cache backend
   - Added 40+ new cache tests for comprehensive coverage
   - Achieved 17x performance improvement on cache hits
   - Alpha Vantage API caching: 7-day TTL (604,800s)
@@ -200,7 +204,7 @@ See `CLAUDE.md` for detailed development guidelines.
 - Comparison reports (current vs. previous quarter vs. year-ago)
 - CSV export for external analysis (Excel, Google Sheets, Python)
 - Track complete DCF assumptions with each snapshot
-- Implementation tasks 035-042 ready in `/tasks` directory
+- Full specification available in `specs/phase-6-historical-valuations.md`
 
 ## Testing
 
@@ -239,7 +243,7 @@ uv run pytest --cov
 - ✅ **Phase 5.2**: Testing and Bug Fixes (100% test pass rate)
 
 ### Planned Phases
-- 📋 **Phase 6**: Historical Valuation Storage - **Ready for implementation** (Tasks 035-042)
+- 📋 **Phase 6**: Historical Valuation Storage - **Ready for implementation** (See `specs/phase-6-historical-valuations.md`)
 - 📋 **Phase 6.1**: Visualizations & Analytics (Chart.js, advanced analytics, API)
 - 📋 **Phase 7**: Individual Stock Scanning (custom ticker search)
 - 📋 **Phase 8**: Stock Price Integration (marketdata API)
@@ -251,9 +255,9 @@ See `reference/ROADMAP.md` for detailed phase descriptions.
 ## Contributing
 
 1. Review `CLAUDE.md` for coding standards
-2. Follow task-based development workflow
+2. Follow spec-based development workflow (see `specs/` directory)
 3. Maintain test coverage for new features (>90% target)
-4. Update documentation (ROADMAP, task files)
+4. Update documentation (ROADMAP, spec files)
 
 ## License
 
@@ -264,7 +268,7 @@ Private project - All rights reserved
 For issues, feature requests, or questions:
 - Review `reference/ROADMAP.md` for planned features
 - See `CLAUDE.md` for development context
-- Check `/tasks` directory for implementation details
+- Check `specs/` directory for phase implementation specifications
 
 ---
 
