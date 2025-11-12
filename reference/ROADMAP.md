@@ -32,6 +32,7 @@ Wheel Analyzer looks through a curated list of stocks, finds their options for a
 
 Detailed implementation plans are documented in the `/specs` directory:
 - `phase-6-historical-valuations.md` - Historical valuation storage system (8 tasks, 60+ tests)
+- `phase-6.1-visualizations-analytics.md` - Interactive Chart.js visualizations and analytics (6 tasks, 30-40 tests)
 
 
 ## Development Phases
@@ -225,27 +226,55 @@ See `specs/phase-6-historical-valuations.md` for complete specifications.
 
 ### Phase 6.1: Visualizations and Advanced Analytics
 
-**Status**: To be planned later
+**Status**: 📋 Planning Complete - Ready for implementation
+
+**Specification**: `specs/phase-6.1-visualizations-analytics.md`
 
 **Summary**:
-Enhance Phase 6 historical valuation features with interactive visualizations, advanced analytics, and API integration.
+Enhance Phase 6 historical valuation features with interactive Chart.js visualizations and intermediate-level analytics. Focus on user-facing features that help understand valuation trends, compare DCF methods, and analyze sensitivity of intrinsic value calculations. REST API, historical price tracking, and notification systems are deferred to future phases.
 
 **Planned Features**:
-- Chart.js visualizations (line charts, bar charts, stacked area charts)
-- Advanced analytics (volatility, sensitivity, CAGR, correlation)
-- REST API endpoints with Django REST Framework
-- Historical price tracking (integrates with Phase 8)
-- Notification system (email alerts, weekly digests)
+- **Dedicated Analytics Page** (`/scanner/valuations/analytics/`):
+  - Portfolio overview with aggregate metrics
+  - Multi-line trend chart showing all stocks' intrinsic values over time
+  - Method comparison section (EPS vs. FCF scatter plot and bar charts)
+  - Sortable analytics table with volatility, CAGR, and correlation metrics
+  - Interactive sensitivity analysis with DCF assumption sliders
+- **Embedded Charts**:
+  - Stock history page: Dual-line chart (EPS + FCF methods) with quick stats cards
+  - Comparison page: Grouped bar chart comparing current values across all stocks
+- **Analytics Module** (`scanner/analytics.py`):
+  - Volatility calculations (standard deviation, coefficient of variation)
+  - CAGR computation for intrinsic value changes
+  - Correlation analysis between EPS and FCF methods
+  - Sensitivity analysis (test impact of assumption changes on IV)
+  - Portfolio-wide and per-stock analytics functions
 
 **Technical Highlights**:
-- Chart.js for client-side rendering
-- Analytics module: `scanner/analytics.py`
-- Celery + Redis for async notifications
-- Django signals for event-driven architecture
+- Chart.js 4.x for client-side rendering (interactive, responsive, dark mode)
+- Pure Python analytics module (no external dependencies beyond stdlib)
+- HTMX for sensitivity analysis form submissions
+- Efficient database queries with prefetch_related
+- Dark mode support across all visualizations
 
-**Dependencies**: Requires Phase 6 completion, integrates with Phase 8
+**Implementation Tasks**:
+1. Create analytics module with calculation functions (2-3 hours)
+2. Build dedicated analytics page with trend charts (3-4 hours)
+3. Add embedded chart to stock history page (2 hours)
+4. Add embedded chart to comparison page (1.5 hours)
+5. Implement sensitivity analysis feature (2-3 hours)
+6. Testing and documentation (2-3 hours)
 
-**Estimated Effort**: 10-15 hours across 5-7 tasks
+**Dependencies**: Requires Phase 6 completion (ValuationHistory model)
+
+**Deferred to Future Phases**:
+- REST API endpoints (Phase 6.2)
+- Historical price tracking (Phase 8 integration)
+- Notification system (Phase 6.3)
+
+**Estimated Effort**: 12.5-16.5 hours across 6 tasks (2-3 focused days)
+
+**Target Tests**: 277-287 total (247 existing + 30-40 new Phase 6.1 tests)
 
 ### Phase 7: Individual Stock Options Scanning
 
