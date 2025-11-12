@@ -231,7 +231,7 @@ LOGGING = {
 
 # Django-CSP 4.0+ uses dictionary-based configuration
 # See: https://django-csp.readthedocs.io/en/latest/migration-guide.html
-from csp.constants import SELF, NONE
+from csp.constants import NONE, SELF
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
@@ -270,19 +270,20 @@ CONTENT_SECURITY_POLICY = {
 
 # HTTP Strict Transport Security (HSTS)
 # Forces browsers to use HTTPS for all future requests
-if ENVIRONMENT == "PRODUCTION":
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-else:
+# Disabled because we are using this in a docker container and HTTPS is terminated at the load balancer
+# if ENVIRONMENT == "PRODUCTION":
+#     SECURE_HSTS_SECONDS = 31536000  # 1 year
+#     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+#     SECURE_HSTS_PRELOAD = True
+#     SECURE_SSL_REDIRECT = True
+#     SESSION_COOKIE_SECURE = True
+#     CSRF_COOKIE_SECURE = True
+# else:
     # Development/Testing - no HTTPS enforcement
-    SECURE_HSTS_SECONDS = 0
-    SECURE_SSL_REDIRECT = False
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
+SECURE_HSTS_SECONDS = 0
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 
 # Prevent MIME-sniffing
 SECURE_CONTENT_TYPE_NOSNIFF = True
