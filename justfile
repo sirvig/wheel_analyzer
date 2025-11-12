@@ -109,3 +109,6 @@ docker-stop:
 
 ngrok:
   ngrok http 8000
+
+ccusage *args:
+  npx ccusage@latest {{args}}

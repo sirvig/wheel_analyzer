@@ -1,8 +1,42 @@
 # Bugs
 
 Pending:
+(none)
 
 Completed:
+- ✅ We are missing legend labels and axis labels on the "Intrinsic value trends" chart on /scanner/valuations/analytics/ page and on the "Current Intrinsic Values by Method" chart on the /scanner/valuations/comparison/ page
+  - **Root Cause**: Dark mode detection was incorrect. The JavaScript was checking for `document.documentElement.classList.contains('dark')` which wasn't reliably detecting the actual page background color. This caused text labels to be rendered in colors that matched the background (invisible labels).
+  - **Fixed**: Changed dark mode detection to read actual computed background color from `window.getComputedStyle(document.body).backgroundColor` and check RGB values to determine light vs dark background, then apply contrasting text colors.
+  - **Files Changed**:
+    - Modified: `templates/scanner/analytics.html` - Updated color detection logic (lines 207-216)
+    - Modified: `templates/scanner/valuation_comparison.html` - Updated color detection logic (lines 216-225)
+    - Modified: `templates/scanner/stock_history.html` - Updated color detection logic (lines 219-228)
+  - **How it works**: JavaScript now reads the actual background color using `getComputedStyle()`, parses the RGB value, and determines if background is dark (RGB < 128) or light. Then applies correct contrasting colors: light text (#f9fafb) on dark backgrounds, dark text (#1f2937) on light backgrounds.
+  - **Verification**: Labels now visible on all three chart pages across both light and dark modes. User confirmed fix works after testing with diagnostic tools.
+
+Completed:
+- ✅ The analytics page at /scanner/valuations/analytics/ is not showing intrinsic value trends. Total stocks are showing up as 26 but "With history" is 0 and no charts are being drawn
+  - **Root Cause**: Field name mismatch between analytics code and ValuationHistory model. Code was attempting to access `eps_intrinsic_value` and `fcf_intrinsic_value`, but the actual model fields are named `intrinsic_value` and `intrinsic_value_fcf`. This caused AttributeError exceptions that were silently caught, preventing any analytics from being calculated.
+  - **Fixed**: Corrected all field name references to match the ValuationHistory model definition
+  - **Files Changed**:
+    - Modified: `scanner/analytics.py` lines 391, 393, 396, 398, 434, 435 (6 occurrences - changed `eps_intrinsic_value` to `intrinsic_value` and `fcf_intrinsic_value` to `intrinsic_value_fcf`)
+    - Modified: `scanner/views.py` lines 356, 360 (2 occurrences - same field name corrections in chart data preparation)
+  - **How it works**: The ValuationHistory model stores EPS-based valuation in `intrinsic_value` field and FCF-based valuation in `intrinsic_value_fcf` field. The analytics functions now correctly access these fields when extracting historical values for trend calculations, volatility analysis, and CAGR computations.
+  - **Verification**:
+    - Analytics page now shows "With history: 26/26 stocks" (was 0)
+    - All 416 ValuationHistory snapshots are being processed
+    - Trend charts are now rendering correctly with multi-line data
+    - All 243 tests passing (100% pass rate)
+  - **Prevention**: Consider adding type hints to analytics functions, integration tests that verify field access, and enabling mypy static analysis to catch attribute errors before runtime.
+- ✅ When navigating to /scanner/valuations/analytics/ I am getting an error "Cannot resolve keyword 'is_active' into field. Choices are: active, created_at, current_eps, current_fcf_per_share, desired_return, eps_growth_rate, eps_multiple, fcf_growth_rate, fcf_multiple, id, intrinsic_value, intrinsic_value_fcf, last_calculation_date, notes, preferred_valuation_method, projection_years, symbol, updated_at, valuation_history"
+  - **Root Cause**: The Phase 6.1 analytics implementation used incorrect field name `is_active` instead of `active` when querying CuratedStock model. This is a common naming convention confusion - `is_active` is frequently used in Django models (e.g., Django's User model), but this codebase uses the simpler `active` field name.
+  - **Fixed**: Applied minimal surgical fix by replacing `is_active` with `active` in two locations
+  - **Files Changed**:
+    - Modified: `scanner/views.py` line 713 in `analytics_view()` (changed `is_active=True` to `active=True`)
+    - Modified: `scanner/analytics.py` line 482 in `get_portfolio_analytics()` (changed `is_active=True` to `active=True`)
+  - **How it works**: The CuratedStock model defines the field as `active` (boolean field for filtering active/inactive stocks). The analytics view and portfolio analytics function now correctly query `CuratedStock.objects.filter(active=True)` to get all active stocks.
+  - **Verification**: Confirmed all other locations in codebase (13+ occurrences) correctly use `active=True`. No other instances of `is_active` found in scanner app.
+  - **Prevention**: When implementing new features, cross-reference existing model definitions for correct field names. Consider IDE autocomplete to prevent field name typos.
 - ✅ The calculate_intrinsic_value command does not actually cache the API return into redis. It looks like we are using Django cache but are not actually defining the Redis cache in settings.
   - **Fixed**: Migrated entire scanner app to Django cache backend with proper Redis configuration
   - **Tasks Completed**: 

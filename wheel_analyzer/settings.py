@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "django_filters",
     "django_htmx",
+    "csp",
     # project apps
     "tracker",
     "scanner",
@@ -66,6 +67,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "csp.middleware.CSPMiddleware",
     "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -222,3 +224,74 @@ LOGGING = {
         },
     },
 }
+
+# =============================================================================
+# CONTENT SECURITY POLICY (CSP) CONFIGURATION
+# =============================================================================
+
+# Django-CSP 4.0+ uses dictionary-based configuration
+# See: https://django-csp.readthedocs.io/en/latest/migration-guide.html
+from csp.constants import SELF, NONE
+
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": [SELF],
+        "script-src": [
+            SELF,
+            "https://cdn.jsdelivr.net",  # Chart.js, Flowbite
+            "https://cdn.tailwindcss.com",  # Tailwind CDN
+            "'unsafe-inline'",  # Temporarily allow inline scripts (HTMX, Chart.js init, Tailwind config)
+        ],
+        "style-src": [
+            SELF,
+            "https://cdn.jsdelivr.net",  # DaisyUI, Flowbite CSS
+            "https://cdn.tailwindcss.com",  # Tailwind CDN styles
+            "'unsafe-inline'",  # Allow inline styles (Tailwind)
+        ],
+        "img-src": [
+            SELF,
+            "data:",  # Allow data URIs for images
+        ],
+        "font-src": [SELF],
+        "connect-src": [SELF],
+        "frame-ancestors": [NONE],  # Prevent clickjacking
+        "base-uri": [SELF],
+        "form-action": [SELF],
+    },
+}
+
+# CSP reporting (optional - enable in production)
+# CONTENT_SECURITY_POLICY["REPORT_URI"] = "/csp-report/"
+# To test without blocking, use CONTENT_SECURITY_POLICY_REPORT_ONLY instead
+
+# =============================================================================
+# SECURITY HEADERS CONFIGURATION (VULN-007)
+# =============================================================================
+
+# HTTP Strict Transport Security (HSTS)
+# Forces browsers to use HTTPS for all future requests
+if ENVIRONMENT == "PRODUCTION":
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+else:
+    # Development/Testing - no HTTPS enforcement
+    SECURE_HSTS_SECONDS = 0
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
+# Prevent MIME-sniffing
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# X-Frame-Options - already set via middleware, but explicit here
+X_FRAME_OPTIONS = "DENY"
+
+# Browser XSS filter
+SECURE_BROWSER_XSS_FILTER = True
+
+# Referrer Policy
+SECURE_REFERRER_POLICY = "same-origin"

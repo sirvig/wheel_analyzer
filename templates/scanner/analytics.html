@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto mt-4 px-4">
+  {# Page header with navigation #}
+  <nav class="flex mb-4" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+      <li class="inline-flex items-center">
+        <a href="{% url 'scanner:valuations' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+          </svg>
+          Valuations
+        </a>
+      </li>
+      <li aria-current="page">
+        <div class="flex items-center">
+          <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+          </svg>
+          <span class="ml-1 text-sm font-medium text-gray-500 md:ml-2 dark:text-gray-400">Analytics</span>
+        </div>
+      </li>
+    </ol>
+  </nav>
+
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Portfolio Analytics</h1>
+    <p class="text-gray-600 dark:text-gray-400 mt-2">
+      Comprehensive analytics and trend visualization for your valuation portfolio
+    </p>
+  </div>
+
+  {# Portfolio Overview Cards #}
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+      <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Stocks</h3>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+        {{ analytics.total_stocks }}
+      </p>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+      <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">With History</h3>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+        {{ analytics.stocks_with_history }}
+      </p>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+      <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Avg IV</h3>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+        {% if analytics.portfolio_stats.average_iv %}
+          ${{ analytics.portfolio_stats.average_iv }}
+        {% else %}
+          N/A
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+      <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Snapshots</h3>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+        {{ analytics.portfolio_stats.total_data_points }}
+      </p>
+    </div>
+  </div>
+
+  {# Trend Chart Section #}
+  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold text-gray-900 dark:text-white">Intrinsic Value Trends</h2>
+      <span class="text-sm text-gray-500 dark:text-gray-400">{{ date_range }}</span>
+    </div>
+
+    {% if analytics.stocks_with_history > 0 %}
+      <div class="relative h-96">
+        <canvas id="trendChart"></canvas>
+      </div>
+    {% else %}
+      <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+        </svg>
+        <p class="text-lg font-medium">No historical data available</p>
+        <p class="text-sm mt-2">Create quarterly valuation snapshots to see trend charts</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# Analytics Table Section #}
+  {% if analytics.stock_analytics %}
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
+      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Stock Analytics</h2>
+
+      <div class="relative overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+          <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+            <tr>
+              <th scope="col" class="px-6 py-3">Symbol</th>
+              <th scope="col" class="px-6 py-3">Latest IV</th>
+              <th scope="col" class="px-6 py-3">Volatility</th>
+              <th scope="col" class="px-6 py-3">CAGR</th>
+              <th scope="col" class="px-6 py-3">Correlation</th>
+              <th scope="col" class="px-6 py-3">Data Points</th>
+              <th scope="col" class="px-6 py-3">Method</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for stock in analytics.stock_analytics %}
+              <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                  <a href="{% url 'scanner:stock_history' stock.symbol %}" class="text-blue-600 hover:underline dark:text-blue-400">
+                    {{ stock.symbol }}
+                  </a>
+                </td>
+                <td class="px-6 py-4">
+                  {% if stock.preferred_method == 'EPS' and stock.latest_eps_iv %}
+                    ${{ stock.latest_eps_iv }}
+                  {% elif stock.preferred_method == 'FCF' and stock.latest_fcf_iv %}
+                    ${{ stock.latest_fcf_iv }}
+                  {% else %}
+                    N/A
+                  {% endif %}
+                </td>
+                <td class="px-6 py-4">
+                  {% if stock.effective_volatility.std_dev %}
+                    {{ stock.effective_volatility.std_dev }}
+                    <span class="text-xs text-gray-500">(CV: {{ stock.effective_volatility.coefficient_of_variation }}%)</span>
+                  {% else %}
+                    N/A
+                  {% endif %}
+                </td>
+                <td class="px-6 py-4">
+                  {% if stock.effective_cagr %}
+                    <span class="{% if stock.effective_cagr > 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                      {{ stock.effective_cagr }}%
+                    </span>
+                  {% else %}
+                    N/A
+                  {% endif %}
+                </td>
+                <td class="px-6 py-4">
+                  {% if stock.correlation %}
+                    {{ stock.correlation }}
+                  {% else %}
+                    N/A
+                  {% endif %}
+                </td>
+                <td class="px-6 py-4">{{ stock.data_points }}</td>
+                <td class="px-6 py-4">
+                  <span class="px-2 py-1 text-xs font-medium rounded {% if stock.preferred_method == 'EPS' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300{% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300{% endif %}">
+                    {{ stock.preferred_method }}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  {# Portfolio Statistics Summary #}
+  {% if analytics.portfolio_stats.average_volatility or analytics.portfolio_stats.average_cagr %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Portfolio Volatility</h3>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white">
+          {% if analytics.portfolio_stats.average_volatility %}
+            {{ analytics.portfolio_stats.average_volatility }}
+          {% else %}
+            N/A
+          {% endif %}
+        </p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Average standard deviation</p>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Portfolio CAGR</h3>
+        <p class="text-2xl font-bold {% if analytics.portfolio_stats.average_cagr > 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+          {% if analytics.portfolio_stats.average_cagr %}
+            {{ analytics.portfolio_stats.average_cagr }}%
+          {% else %}
+            N/A
+          {% endif %}
+        </p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Average compound annual growth rate</p>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+
+<script>
+  // Initialize Chart.js with trend data
+  {% if analytics.stocks_with_history > 0 %}
+  document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    const chartData = {{ chart_data_json|safe }};
+
+    // Get computed colors from the actual page styles
+    const computedStyle = window.getComputedStyle(document.body);
+    const bgColor = computedStyle.backgroundColor;
+
+    // Detect if we're in dark mode by checking background lightness
+    const isDark = bgColor.includes('rgb') &&
+                   parseInt(bgColor.split(',')[0].replace(/[^\d]/g, '')) < 128;
+
+    const textColor = isDark ? '#f9fafb' : '#1f2937';
+    const gridColor = isDark ? '#4b5563' : '#d1d5db';
+
+    new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          title: {
+            display: false,
+          },
+          legend: {
+            display: true,
+            position: 'bottom',
+            labels: {
+              color: textColor,
+              usePointStyle: true,
+              padding: 15,
+              font: {
+                size: 11
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                  label += '$' + context.parsed.y.toFixed(2);
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Snapshot Date',
+              color: textColor
+            },
+            ticks: {
+              color: textColor
+            },
+            grid: {
+              color: gridColor
+            }
+          },
+          y: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Intrinsic Value ($)',
+              color: textColor
+            },
+            ticks: {
+              color: textColor,
+              callback: function(value) {
+                return '$' + value.toFixed(0);
+              }
+            },
+            grid: {
+              color: gridColor
+            }
+          }
+        }
+      }
+    });
+  });
+  {% endif %}
+</script>
+
+{% endblock %}

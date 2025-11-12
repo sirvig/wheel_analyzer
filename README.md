@@ -17,6 +17,15 @@ A Django-based web application for tracking and analyzing stock options trading 
 - **Preferred Method**: Choose between EPS or FCF valuation per stock
 - **Visual Highlighting**: At-a-glance identification of preferred valuation method
 - **Daily Rolling Updates**: Automated calculations with 7-stock daily limit
+- **Historical Snapshots**: Quarterly valuation history with complete DCF assumptions
+
+### 📉 Analytics & Visualization
+- **Interactive Charts**: Chart.js visualizations on analytics, history, and comparison pages
+- **Trend Analysis**: Multi-line charts showing intrinsic value changes over time
+- **Portfolio Metrics**: Aggregate statistics including average IV, volatility, and CAGR
+- **Quick Stats**: Highest, lowest, and average intrinsic values with date tracking
+- **Method Comparison**: Visual comparison of EPS vs. FCF valuation methods
+- **Performance Analytics**: Volatility, correlation, and compound annual growth rate calculations
 
 ### 📈 Campaign Tracking
 - **Transaction History**: Track puts, calls, rolls, assignments, and dividends
@@ -157,15 +166,28 @@ See `CLAUDE.md` for detailed development guidelines and `specs/` directory for p
 
 ## Current Status
 
-**Latest Milestone**: Phase 5 - Visual Indicators & Reliability (Completed ✅)
-- Options scanner shows strike price vs. intrinsic value comparison
-- Valuations page with highlighted preferred method
-- Comprehensive testing and error handling
-- Cache migration to Django framework (17x performance improvement)
-- **100% test pass rate** - 216/216 tests passing ✅
+**Latest Milestone**: Phase 6.1 - Analytics & Visualizations (Completed ✅)
+- Interactive Chart.js visualizations on 3 pages (analytics, history, comparison)
+- Comprehensive analytics module with volatility, CAGR, and correlation calculations
+- Portfolio-wide metrics dashboard with trend charts
+- Per-stock quick stats and analytics cards
+- Method comparison bar charts and dual-line trend charts
+- Dark mode support across all visualizations
+- **Core features implemented** - Sensitivity analysis deferred to future phase
 
 **Recent Updates**:
-- **Nov 12, 2025**: Workflow Restructuring
+- **Nov 12, 2025 (Afternoon)**: Phase 6.1 Implementation Complete
+  - Created `scanner/analytics.py` module (546 lines) with 6 analytics functions
+  - Built dedicated analytics page at `/scanner/valuations/analytics/`
+  - Added embedded line chart to stock history page with quick stats boxes
+  - Added embedded bar chart to comparison report page
+  - Integrated Chart.js 4.4.1 for client-side interactive visualizations
+  - All charts support dark mode with computed CSS variables
+  - Portfolio analytics: average IV, volatility, CAGR across all stocks
+  - Stock analytics: volatility (std dev, CV), CAGR, EPS/FCF correlation
+  - Code quality: All linting checks passed
+
+- **Nov 12, 2025 (Morning)**: Workflow Restructuring
   - Migrated from individual task files to comprehensive spec files
   - Updated development workflow to use `/build` command with spec file arguments
   - Simplified ROADMAP.md to reference spec files instead of individual tasks
