@@ -710,7 +710,7 @@ def analytics_view(request):
     all_dates = set()
     stocks_data = {}
 
-    active_stocks = CuratedStock.objects.filter(is_active=True).prefetch_related(
+    active_stocks = CuratedStock.objects.filter(active=True).prefetch_related(
         'valuation_history'
     )
 

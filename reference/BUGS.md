@@ -1,8 +1,18 @@
 # Bugs
 
 Pending:
+(none)
 
 Completed:
+- ✅ When navigating to /scanner/valuations/analytics/ I am getting an error "Cannot resolve keyword 'is_active' into field. Choices are: active, created_at, current_eps, current_fcf_per_share, desired_return, eps_growth_rate, eps_multiple, fcf_growth_rate, fcf_multiple, id, intrinsic_value, intrinsic_value_fcf, last_calculation_date, notes, preferred_valuation_method, projection_years, symbol, updated_at, valuation_history"
+  - **Root Cause**: The Phase 6.1 analytics implementation used incorrect field name `is_active` instead of `active` when querying CuratedStock model. This is a common naming convention confusion - `is_active` is frequently used in Django models (e.g., Django's User model), but this codebase uses the simpler `active` field name.
+  - **Fixed**: Applied minimal surgical fix by replacing `is_active` with `active` in two locations
+  - **Files Changed**:
+    - Modified: `scanner/views.py` line 713 in `analytics_view()` (changed `is_active=True` to `active=True`)
+    - Modified: `scanner/analytics.py` line 482 in `get_portfolio_analytics()` (changed `is_active=True` to `active=True`)
+  - **How it works**: The CuratedStock model defines the field as `active` (boolean field for filtering active/inactive stocks). The analytics view and portfolio analytics function now correctly query `CuratedStock.objects.filter(active=True)` to get all active stocks.
+  - **Verification**: Confirmed all other locations in codebase (13+ occurrences) correctly use `active=True`. No other instances of `is_active` found in scanner app.
+  - **Prevention**: When implementing new features, cross-reference existing model definitions for correct field names. Consider IDE autocomplete to prevent field name typos.
 - ✅ The calculate_intrinsic_value command does not actually cache the API return into redis. It looks like we are using Django cache but are not actually defining the Redis cache in settings.
   - **Fixed**: Migrated entire scanner app to Django cache backend with proper Redis configuration
   - **Tasks Completed**: 

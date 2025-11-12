@@ -479,7 +479,7 @@ def get_portfolio_analytics() -> Dict[str, Any]:
                 - average_cagr: Mean CAGR across stocks
             - stock_analytics: List of per-stock analytics dictionaries
     """
-    active_stocks = CuratedStock.objects.filter(is_active=True)
+    active_stocks = CuratedStock.objects.filter(active=True)
     total_stocks = active_stocks.count()
 
     # Get analytics for each stock
