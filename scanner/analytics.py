@@ -388,14 +388,14 @@ def get_stock_analytics(symbol: str) -> Dict[str, Any]:
 
     # Extract EPS and FCF intrinsic values
     eps_values = [
-        float(h.eps_intrinsic_value)
+        float(h.intrinsic_value)
         for h in history
-        if h.eps_intrinsic_value is not None
+        if h.intrinsic_value is not None
     ]
     fcf_values = [
-        float(h.fcf_intrinsic_value)
+        float(h.intrinsic_value_fcf)
         for h in history
-        if h.fcf_intrinsic_value is not None
+        if h.intrinsic_value_fcf is not None
     ]
 
     # Get effective intrinsic values (based on preferred method)
@@ -431,8 +431,8 @@ def get_stock_analytics(symbol: str) -> Dict[str, Any]:
 
     # Get latest values
     latest = history.last()
-    latest_eps_iv = float(latest.eps_intrinsic_value) if latest.eps_intrinsic_value else None
-    latest_fcf_iv = float(latest.fcf_intrinsic_value) if latest.fcf_intrinsic_value else None
+    latest_eps_iv = float(latest.intrinsic_value) if latest.intrinsic_value else None
+    latest_fcf_iv = float(latest.intrinsic_value_fcf) if latest.intrinsic_value_fcf else None
 
     # Calculate highest, lowest, average based on preferred method
     if effective_values:

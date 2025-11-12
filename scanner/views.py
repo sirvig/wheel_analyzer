@@ -353,11 +353,11 @@ def stock_history_view(request, symbol):
 
             chart_labels = [h.quarter_label for h in history_chronological]
             eps_data = [
-                float(h.eps_intrinsic_value) if h.eps_intrinsic_value else None
+                float(h.intrinsic_value) if h.intrinsic_value else None
                 for h in history_chronological
             ]
             fcf_data = [
-                float(h.fcf_intrinsic_value) if h.fcf_intrinsic_value else None
+                float(h.intrinsic_value_fcf) if h.intrinsic_value_fcf else None
                 for h in history_chronological
             ]
 

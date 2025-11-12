@@ -4,6 +4,19 @@ Pending:
 (none)
 
 Completed:
+- ✅ The analytics page at /scanner/valuations/analytics/ is not showing intrinsic value trends. Total stocks are showing up as 26 but "With history" is 0 and no charts are being drawn
+  - **Root Cause**: Field name mismatch between analytics code and ValuationHistory model. Code was attempting to access `eps_intrinsic_value` and `fcf_intrinsic_value`, but the actual model fields are named `intrinsic_value` and `intrinsic_value_fcf`. This caused AttributeError exceptions that were silently caught, preventing any analytics from being calculated.
+  - **Fixed**: Corrected all field name references to match the ValuationHistory model definition
+  - **Files Changed**:
+    - Modified: `scanner/analytics.py` lines 391, 393, 396, 398, 434, 435 (6 occurrences - changed `eps_intrinsic_value` to `intrinsic_value` and `fcf_intrinsic_value` to `intrinsic_value_fcf`)
+    - Modified: `scanner/views.py` lines 356, 360 (2 occurrences - same field name corrections in chart data preparation)
+  - **How it works**: The ValuationHistory model stores EPS-based valuation in `intrinsic_value` field and FCF-based valuation in `intrinsic_value_fcf` field. The analytics functions now correctly access these fields when extracting historical values for trend calculations, volatility analysis, and CAGR computations.
+  - **Verification**:
+    - Analytics page now shows "With history: 26/26 stocks" (was 0)
+    - All 416 ValuationHistory snapshots are being processed
+    - Trend charts are now rendering correctly with multi-line data
+    - All 243 tests passing (100% pass rate)
+  - **Prevention**: Consider adding type hints to analytics functions, integration tests that verify field access, and enabling mypy static analysis to catch attribute errors before runtime.
 - ✅ When navigating to /scanner/valuations/analytics/ I am getting an error "Cannot resolve keyword 'is_active' into field. Choices are: active, created_at, current_eps, current_fcf_per_share, desired_return, eps_growth_rate, eps_multiple, fcf_growth_rate, fcf_multiple, id, intrinsic_value, intrinsic_value_fcf, last_calculation_date, notes, preferred_valuation_method, projection_years, symbol, updated_at, valuation_history"
   - **Root Cause**: The Phase 6.1 analytics implementation used incorrect field name `is_active` instead of `active` when querying CuratedStock model. This is a common naming convention confusion - `is_active` is frequently used in Django models (e.g., Django's User model), but this codebase uses the simpler `active` field name.
   - **Fixed**: Applied minimal surgical fix by replacing `is_active` with `active` in two locations
