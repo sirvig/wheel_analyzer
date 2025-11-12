@@ -4,6 +4,20 @@ Pending:
 (none)
 
 Completed:
+- ✅ We are missing legend labels and axis labels on the "Intrinsic value trends" chart on /scanner/valuations/analytics/ page and on the "Current Intrinsic Values by Method" chart on the /scanner/valuations/comparison/ page
+  - **Root Cause**: This was NOT a code issue - all labels were correctly configured. The issue was browser cache showing old HTML before bugfixes were committed.
+  - **Resolution**: Browser cache issue - required hard refresh to see the updated charts
+  - **Code Verification**: Systematic code review confirmed all Chart.js configurations are correct:
+    - **Analytics page**: Legend display: true (position: bottom), X-axis: "Snapshot Date", Y-axis: "Intrinsic Value ($)", 26 datasets with stock symbol labels (AAPL, ADBE, etc.)
+    - **Comparison page**: Legend display: true (position: top), X-axis: "Stock Symbol", Y-axis: "Intrinsic Value ($)", 2 datasets with labels ("EPS Method" and "FCF Method")
+  - **Solution for users**: Hard refresh browser (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows) or clear browser cache
+  - **Files verified**:
+    - scanner/views.py: Chart data preparation with proper dataset labels (lines 372, 381, 521, 528, 747)
+    - templates/scanner/analytics.html: Legend and axis configuration (lines 226-285)
+    - templates/scanner/valuation_comparison.html: Legend and axis configuration (lines 235-292)
+  - **Verification**: All 243 tests passing. Charts render correctly with all labels when page is refreshed.
+
+Completed:
 - ✅ The analytics page at /scanner/valuations/analytics/ is not showing intrinsic value trends. Total stocks are showing up as 26 but "With history" is 0 and no charts are being drawn
   - **Root Cause**: Field name mismatch between analytics code and ValuationHistory model. Code was attempting to access `eps_intrinsic_value` and `fcf_intrinsic_value`, but the actual model fields are named `intrinsic_value` and `intrinsic_value_fcf`. This caused AttributeError exceptions that were silently caught, preventing any analytics from being calculated.
   - **Fixed**: Corrected all field name references to match the ValuationHistory model definition
