@@ -20,6 +20,7 @@ PLAN_OUTPUT_DIRECTORY: `specs/`
   - If the question is about choosing different options, please provide me with a list of options to choose from. Mark the option with a clear label, like a, b, c, etc.
   - If the question need custom input that is not in the list of options, please ask me to provide the custom input.
 - Think deeply (ultrathink) about the best approach to implement the requested functionality or solve the problem
+- When considering the plan, create parallel work for sub agents code-guardian, docs-engineer, security-auditor, test-sentinel, and root-cause-debugger.
 - Create a concise implementation plan that includes:
   - Clear problem statement and objectives
   - Technical approach and architecture decisions
