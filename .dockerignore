@@ -8,3 +8,5 @@ db.sqlite3
 docker-compose.yml
 .claude/*
 .gemini/*
+.vscode/*
+__pycache__/
