@@ -265,6 +265,7 @@ results/
 CVS/
 claude-output.json
 .claude/commands/feature.md
+.vscode/
 
 # Specs - ignore everything except specific plan files
 specs/*
