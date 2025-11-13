@@ -11,6 +11,23 @@ A Django-based web application for tracking and analyzing stock options trading 
 - **Development Mode**: Local environment bypass for testing outside market hours
 - **Visual Indicators**: Color-coded badges showing strike price vs. intrinsic value comparison
 
+### 🔍 Individual Stock Scanner
+- **Custom Ticker Search**: Search for options on any stock ticker (not just curated list)
+- **Option Type Selection**: Choose between put or call options with radio button interface
+- **Background Scanning**: User-isolated scans with real-time progress updates via HTMX polling
+- **Intrinsic Value Badges**: Conditional display for curated stocks (✓ Good, ✗ High, ⚠ N/A)
+- **Multi-User Support**: Isolated cache keys per user ID prevent cross-user interference
+- **Flexible Time Range**: Specify weeks parameter (1-52 range, default: 4 weeks)
+
+### 💾 Saved Searches
+- **Bookmark Tickers**: Save frequently scanned tickers for quick access
+- **One-Click Scanning**: Trigger scans directly from saved searches list
+- **Notes & Organization**: Add notes for categorization and context
+- **Usage Tracking**: Automatic scan counter and last scanned timestamp
+- **Flexible Sorting**: Sort by date created, ticker name, scan frequency, or last scanned
+- **Inline Editing**: Update notes via HTMX without page reloads
+- **Soft Delete Pattern**: Preserves audit trail and scan history
+
 ### 💰 Valuation System
 - **Dual DCF Models**: Calculate intrinsic value using both EPS and FCF methods
 - **Smart Stock Selection**: Prioritize never-calculated and oldest stocks to respect API limits
@@ -132,7 +149,9 @@ wheel-analyzer/
 │   ├── marketdata/       # Market data API integration
 │   ├── alphavantage/     # Alpha Vantage API integration
 │   ├── valuation.py      # DCF calculation engine
-│   └── models.py         # CuratedStock, OptionsWatch models
+│   ├── analytics.py      # Volatility, CAGR, correlation calculations
+│   ├── forms.py          # IndividualStockScanForm
+│   └── models.py         # CuratedStock, ValuationHistory, SavedSearch, OptionsWatch
 ├── tracker/              # Campaign and transaction tracking
 │   └── models.py         # User, Account, Campaign, Transaction
 ├── templates/            # Django templates
@@ -166,67 +185,61 @@ See `CLAUDE.md` for detailed development guidelines and `specs/` directory for p
 
 ## Current Status
 
-**Latest Milestone**: Phase 6.1 - Analytics & Visualizations (Completed ✅)
-- Interactive Chart.js visualizations on 3 pages (analytics, history, comparison)
-- Comprehensive analytics module with volatility, CAGR, and correlation calculations
-- Portfolio-wide metrics dashboard with trend charts
-- Per-stock quick stats and analytics cards
-- Method comparison bar charts and dual-line trend charts
-- Dark mode support across all visualizations
-- **Core features implemented** - Sensitivity analysis deferred to future phase
+**Latest Milestone**: Phase 7.1 - Save Searches (Completed ✅)
+- Bookmark frequently scanned tickers for quick access and one-click scanning
+- SavedSearch model with soft delete pattern and custom manager
+- 5 new views with HTMX integration (list, save, delete, quick scan, edit notes)
+- 4 sorting options (date created, ticker name, scan frequency, last scanned)
+- User isolation with ForeignKey CASCADE delete and filtered queries
+- Inline notes editing and usage tracking (scan counter, last scanned timestamp)
+- 340 tests passing (100% pass rate) - 79 comprehensive tests generated
+- Security audit: XSS vulnerability fixed with |escapejs filter
 
 **Recent Updates**:
-- **Nov 12, 2025 (Afternoon)**: Phase 6.1 Implementation Complete
+- **Nov 13, 2025**: Phase 7.1 Implementation Complete (Save Searches)
+  - SavedSearch model with 8 fields and soft delete pattern
+  - Custom manager with `active()` and `for_user()` helper methods
+  - 5 new views: list with sorting, save, delete, quick scan, edit notes
+  - 4 new templates with HTMX integration (250+ lines)
+  - User isolation: ForeignKey with CASCADE, unique constraint on (user, ticker, option_type)
+  - Usage tracking: automatic scan counter and last_scanned_at timestamp
+  - 11 files changed, 560 lines added
+  - Security audit: XSS vulnerability fixed with |escapejs filter
+  - 340 tests passing (100% pass rate) - 79 comprehensive tests generated
+
+- **Nov 13, 2025**: Phase 7 Implementation Complete (Individual Stock Scanner)
+  - IndividualStockScanForm with ticker validation and normalization
+  - Background scan with user-specific cache keys (10-minute TTL)
+  - 4 new views: search form, scan trigger, status polling, context helper
+  - 3 new templates with HTMX polling (5-second intervals)
+  - Conditional intrinsic value badges for curated stocks
+  - Multi-user support with isolated cache keys per user ID
+  - 7 files changed, 495 lines added
+  - 302 tests passing (100% pass rate) - 37 new tests generated
+
+- **Nov 12, 2025**: Phase 6.1 Implementation Complete (Analytics & Visualizations)
   - Created `scanner/analytics.py` module (546 lines) with 6 analytics functions
   - Built dedicated analytics page at `/scanner/valuations/analytics/`
-  - Added embedded line chart to stock history page with quick stats boxes
-  - Added embedded bar chart to comparison report page
-  - Integrated Chart.js 4.4.1 for client-side interactive visualizations
-  - All charts support dark mode with computed CSS variables
+  - Added embedded charts to history and comparison pages (Chart.js 4.4.1)
   - Portfolio analytics: average IV, volatility, CAGR across all stocks
   - Stock analytics: volatility (std dev, CV), CAGR, EPS/FCF correlation
-  - Code quality: All linting checks passed
+  - Dark mode support with computed CSS variables
 
-- **Nov 12, 2025 (Morning)**: Workflow Restructuring
-  - Migrated from individual task files to comprehensive spec files
-  - Updated development workflow to use `/build` command with spec file arguments
-  - Simplified ROADMAP.md to reference spec files instead of individual tasks
-  - All documentation updated to reflect new spec-based workflow
+- **Nov 12, 2025**: Phase 6 Implementation Complete (Historical Valuations)
+  - ValuationHistory model with quarterly snapshots
+  - Management command: `create_quarterly_valuation_snapshot`
+  - Per-stock history view with chronological table
+  - Comparison report view with side-by-side analysis
+  - CSV export functionality (single stock and all stocks)
+  - 31 new tests bringing total to 247 tests
 
-- **Nov 11, 2025**: Phase 6 Planning Complete
-  - Created comprehensive implementation plan (`specs/phase-6-historical-valuations.md`)
-  - Updated ROADMAP.md with Phase 6 and Phase 6.1 sections
-  - Ready for implementation: Quarterly snapshots, per-stock history, comparison reports, CSV export
-  - Estimated implementation: 8-12 hours across 8 tasks
-  - Target: 276 tests (60 new tests planned) - Final: 302 tests (86 new tests added)
-
-- **Nov 10, 2025 (Evening)**: Completed cache migration to Django framework
-  - Migrated from direct Redis usage to Django cache backend
-  - Added 40+ new cache tests for comprehensive coverage
-  - Achieved 17x performance improvement on cache hits
-  - Alpha Vantage API caching: 7-day TTL (604,800s)
-  - Scanner options caching: 45-min TTL (2,700s)
-  - All 302 tests passing with improved testability
-
-- **Nov 10, 2025 (PM)**: Fixed all failing tests - achieved 100% test pass rate
-  - Fixed URL namespace issues (10 tests)
-  - Fixed template include paths (1 test)
-  - Added authentication to tests (9 tests)
-  - Fixed mock configurations (8 tests)
-  - Updated assertions for async behavior (6 tests)
-
-- **Nov 10, 2025 (AM)**: Fixed scanner index view context bug
-  - Refactored `index()` view to use DRY helper function
-  - Ensured consistent context across all scanner views
-  - Added 3 comprehensive tests with TDD approach
-
-**Next Phase**: Phase 6 - Historical Valuation Storage
-- Store quarterly snapshots of intrinsic value calculations (Jan 1, Apr 1, Jul 1, Oct 1)
-- Per-stock history pages with trend analysis
-- Comparison reports (current vs. previous quarter vs. year-ago)
-- CSV export for external analysis (Excel, Google Sheets, Python)
-- Track complete DCF assumptions with each snapshot
-- Full specification available in `specs/phase-6-historical-valuations.md`
+**Next Phase**: Phase 7.2 - Rate Limit Dashboard
+- API quota tracking and visualization dashboard
+- Daily scan count and quota limits (e.g., "7 of 25 scans used today")
+- Progress bar visualization and historical usage charts
+- Quota reset countdown timer (midnight ET)
+- Real-time quota checking before scan execution
+- Full specification available in `reference/ROADMAP.md`
 
 ## Testing
 
@@ -241,8 +254,8 @@ just test scanner/tests/test_scanner_views.py
 uv run pytest --cov
 ```
 
-**Test Suite**: 302 tests passing (100% pass rate) ✅
-- Scanner views and integration tests
+**Test Suite**: 340 tests passing (100% pass rate) ✅
+- Scanner views and integration tests (curated + individual)
 - Valuation calculation tests (EPS & FCF methods)
 - Template filter tests with type safety validation
 - Redis error handling and timeout scenarios
@@ -250,6 +263,8 @@ uv run pytest --cov
 - Authentication and authorization tests
 - Cache framework tests (Django cache with Redis backend)
 - Analytics and visualization tests (Phase 6.1)
+- Individual stock scanning tests (Phase 7 - 37 tests)
+- Saved searches tests (Phase 7.1 - 79 tests generated, 76 passing)
 
 ## Roadmap
 
@@ -262,12 +277,14 @@ uv run pytest --cov
 - ✅ **Phase 5**: Visual Intrinsic Value Indicators (color-coded badges)
 - ✅ **Phase 5.1**: Cache Migration to Django Framework (17x faster)
 - ✅ **Phase 5.2**: Testing and Bug Fixes (100% test pass rate)
+- ✅ **Phase 6**: Historical Valuation Storage (quarterly snapshots, CSV export)
+- ✅ **Phase 6.1**: Visualizations & Analytics (Chart.js, volatility, CAGR, correlation)
+- ✅ **Phase 7**: Individual Stock Scanning (custom ticker search, HTMX polling)
+- ✅ **Phase 7.1**: Save Searches (bookmark tickers, one-click scans, soft delete)
 
 ### Planned Phases
-- 📋 **Phase 6**: Historical Valuation Storage - **Ready for implementation** (See `specs/phase-6-historical-valuations.md`)
-- 📋 **Phase 6.1**: Visualizations & Analytics (Chart.js, advanced analytics, API)
-- 📋 **Phase 7**: Individual Stock Scanning (custom ticker search)
-- 📋 **Phase 8**: Stock Price Integration (marketdata API)
+- 📋 **Phase 7.2**: Rate Limit Dashboard (API quota tracking, usage visualization)
+- 📋 **Phase 8**: Stock Price Integration (marketdata API, undervaluation analysis)
 - 📋 **Phase 9**: Home Page Widgets (undervalued stocks, favorable options)
 - 📋 **Phase 10**: Trading Journal (performance tracking, tax calculations)
 

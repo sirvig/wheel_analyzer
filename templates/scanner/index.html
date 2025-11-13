@@ -29,6 +29,14 @@
        class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 dark:bg-green-600 dark:hover:bg-green-700 focus:outline-none dark:focus:ring-green-800">
         Search Individual Stock
     </a>
+
+    <a href="{% url 'scanner:saved_searches' %}"
+       class="text-white bg-purple-700 hover:bg-purple-800 focus:ring-4 focus:ring-purple-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 dark:bg-purple-600 dark:hover:bg-purple-700 focus:outline-none dark:focus:ring-purple-800">
+        <svg class="inline w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/>
+        </svg>
+        My Saved Searches
+    </a>
 </div>
 
 <div id="scan-results">

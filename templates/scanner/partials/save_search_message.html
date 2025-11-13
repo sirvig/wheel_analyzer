@@ -1,0 +1,12 @@
+<div class="p-4 mb-4 text-sm rounded-lg
+     {% if status == 'success' %}text-green-800 bg-green-50 dark:bg-gray-800 dark:text-green-400
+     {% elif status == 'duplicate' %}text-yellow-800 bg-yellow-50 dark:bg-gray-800 dark:text-yellow-300
+     {% else %}text-red-800 bg-red-50 dark:bg-gray-800 dark:text-red-400{% endif %}"
+     role="alert">
+  <span class="font-medium">{{ message }}</span>
+  {% if status == 'success' %}
+    <a href="{% url 'scanner:saved_searches' %}" class="ml-2 underline hover:no-underline">
+      View saved searches
+    </a>
+  {% endif %}
+</div>

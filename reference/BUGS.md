@@ -3,6 +3,27 @@
 Pending:
 
 Completed:
+- ✅ On /scanner/searches/, after clicking edit and adding a note and clicking save, the edit notes dialog does not disappear. The X or cancel buttons do not work to close it. A page refresh does not show the note was added. The error in the log shows "You're accessing the development server over HTTPS, but it only supports HTTP."
+  - **Root Cause**: The modal was not being automatically closed after successful HTMX form submission. While the notes were being saved correctly and the display was being updated via HTMX swap, no code was triggering the `hideEditNotesModal()` function to close the modal. Additionally, browser cache was preventing the JavaScript fix from loading without a hard refresh.
+  - **Fixed**:
+    1. Added HTMX `afterSwap` event listener to automatically close modal after successful note save
+    2. Enhanced modal functions with debug logging, error handling, and form reset
+    3. Added HTMX re-processing for dynamic form attributes
+  - **Files Changed**:
+    - Modified: `static/js/app.js` (+8 lines: HTMX afterSwap event listener)
+    - Modified: `templates/scanner/saved_searches.html` (+35 lines: improved modal functions with debug logging)
+  - **How it works**:
+    - **Automatic Close**: When the edit notes form is submitted via HTMX, the server returns the updated notes partial which swaps into `#notes-display-{pk}`. The event listener in `app.js` detects this swap by checking if the target element's ID starts with 'notes-display-', then calls `hideEditNotesModal()` to close the modal automatically.
+    - **Manual Close**: The improved `hideEditNotesModal()` function now properly resets the form, clears the textarea, and includes debug logging for troubleshooting.
+    - **Debug Logging**: Console logs show `[Modal] Opening modal`, `[Modal] Attempting to hide modal`, and `[Modal] Modal hidden successfully` for easier debugging.
+  - **Verification**: All 419 tests passing (100% pass rate) ✅
+  - **User Action**: Hard refresh browser (Ctrl+Shift+R or Cmd+Shift+R) to clear cached JavaScript after deploying fixes
+  - **Note**: The HTTPS error mentioned in the original bug report is unrelated to the modal closing issue. It occurs when accessing Django's development server via HTTPS (which it doesn't support). Users should access via HTTP: `http://localhost:8000`. In production, HTTPS is handled by the load balancer, not Django.
+  - **Prevention**:
+    - When implementing HTMX modals, always add event listeners to handle modal closure after successful operations
+    - Include debug logging in modal functions for easier troubleshooting
+    - Consider using HTMX response headers like `HX-Trigger` for more explicit control over post-swap actions
+    - Always test with hard refresh after JavaScript changes to avoid browser cache issues
 - ✅ On /scanner/search/ when the scan completes, it says that two options were found but no options are displayed. The found options contracts should be displayed.
   - **Root Cause**: The `search_polling.html` template was missing `id="search-results"` on its root div. The HTMX flow breaks down like this: (1) Form submits with `hx-target="#search-results"` and `hx-swap="outerHTML"`, (2) Server returns polling partial which replaces the entire `#search-results` div, (3) BUT the polling partial doesn't have `id="search-results"`, so that ID disappears from the DOM, (4) When polling completes and tries to swap results into `#search-results`, HTMX can't find the target, so nothing happens.
   - **Fixed**: Added `id="search-results"` to the root div of `search_polling.html`

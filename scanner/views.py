@@ -5,17 +5,19 @@ import threading
 from datetime import date, datetime
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from django.views.decorators.cache import cache_page
 from django_ratelimit.decorators import ratelimit
 from scanner.analytics import get_portfolio_analytics, get_stock_analytics
 from scanner.forms import IndividualStockScanForm
-from scanner.models import CuratedStock, ValuationHistory
+from scanner.models import CuratedStock, SavedSearch, ValuationHistory
 from scanner.scanner import perform_scan
 
 logger = logging.getLogger(__name__)
@@ -1018,3 +1020,218 @@ def _get_individual_scan_context(user_id):
         context.update(results)
 
     return context
+
+
+# ===== Saved Searches Views (Phase 7.1) =====
+
+
+@login_required
+def saved_searches_view(request):
+    """
+    Display user's saved searches with sorting options.
+
+    Query params:
+        sort: 'name' | 'date' | 'frequency' | 'recent' (default: 'date')
+    """
+    sort_by = request.GET.get('sort', 'date')
+
+    # Base queryset: user's active searches
+    searches = SavedSearch.objects.for_user(request.user)
+
+    # Apply sorting
+    if sort_by == 'name':
+        searches = searches.order_by('ticker')
+    elif sort_by == 'frequency':
+        searches = searches.order_by('-scan_count', '-last_scanned_at')
+    elif sort_by == 'recent':
+        # Sort by last_scanned_at with NULL values last
+        from django.db.models import F
+        searches = searches.order_by(
+            F('last_scanned_at').desc(nulls_last=True),
+            '-created_at'
+        )
+    else:  # 'date' (default)
+        searches = searches.order_by('-created_at')
+
+    context = {
+        'searches': searches,
+        'sort_by': sort_by,
+    }
+
+    return render(request, 'scanner/saved_searches.html', context)
+
+
+@login_required
+@require_POST
+def save_search_view(request):
+    """
+    Save current search from results page.
+
+    POST params:
+        ticker: Stock symbol
+        option_type: 'put' or 'call'
+
+    Returns HTMX partial with success/duplicate message.
+    """
+    ticker = request.POST.get('ticker', '').strip().upper()
+    option_type = request.POST.get('option_type', '').strip().lower()
+
+    if not ticker or option_type not in ['put', 'call']:
+        context = {
+            'status': 'error',
+            'message': 'Invalid ticker or option type.'
+        }
+        return render(request, 'scanner/partials/save_search_message.html', context)
+
+    try:
+        saved_search, created = SavedSearch.objects.get_or_create(
+            user=request.user,
+            ticker=ticker,
+            option_type=option_type,
+            is_deleted=False,
+            defaults={'notes': ''}
+        )
+
+        if created:
+            logger.info(f"User {request.user.id} saved search: {ticker} {option_type}")
+            context = {
+                'status': 'success',
+                'message': f'Saved {ticker} {option_type}s to your searches!'
+            }
+        else:
+            logger.debug(f"Duplicate save attempt by user {request.user.id}: {ticker} {option_type}")
+            context = {
+                'status': 'duplicate',
+                'message': f'{ticker} {option_type}s is already in your saved searches.'
+            }
+
+    except IntegrityError as e:
+        logger.error(f"Error saving search for user {request.user.id}: {e}")
+        context = {
+            'status': 'error',
+            'message': 'Failed to save search. Please try again.'
+        }
+
+    return render(request, 'scanner/partials/save_search_message.html', context)
+
+
+@login_required
+@require_POST
+def delete_search_view(request, pk):
+    """
+    Soft delete a saved search.
+
+    Args:
+        pk: SavedSearch primary key
+
+    Returns redirect to saved searches list.
+    """
+    saved_search = get_object_or_404(
+        SavedSearch.objects.active(),
+        pk=pk,
+        user=request.user
+    )
+
+    saved_search.soft_delete()
+    logger.info(f"User {request.user.id} deleted saved search: {saved_search.ticker} {saved_search.option_type}")
+
+    messages.success(request, f'Removed {saved_search.ticker} {saved_search.option_type}s from saved searches.')
+
+    return redirect('scanner:saved_searches')
+
+
+@login_required
+@require_POST
+def quick_scan_view(request, pk):
+    """
+    Trigger background scan from saved search.
+
+    Args:
+        pk: SavedSearch primary key
+
+    Increments scan_count and last_scanned_at, then redirects to scan flow.
+    """
+    saved_search = get_object_or_404(
+        SavedSearch.objects.active(),
+        pk=pk,
+        user=request.user
+    )
+
+    # Increment usage statistics
+    saved_search.increment_scan_count()
+    logger.info(f"Quick scan triggered by user {request.user.id}: {saved_search.ticker} {saved_search.option_type} (count: {saved_search.scan_count})")
+
+    # Prepare scan parameters
+    ticker = saved_search.ticker
+    option_type = saved_search.option_type
+    weeks = 4  # Default weeks for quick scan
+
+    user_id = request.user.id
+    lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_lock:{user_id}"
+
+    # Check if scan already in progress
+    if cache.get(lock_key):
+        logger.info(f"Scan already in progress for user {user_id}")
+        context = _get_individual_scan_context(user_id)
+        return render(request, 'scanner/partials/search_polling.html', context)
+
+    # Set lock
+    cache.set(lock_key, True, timeout=600)
+
+    # Store scan metadata
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_ticker:{user_id}",
+        ticker,
+        timeout=600,
+    )
+    cache.set(
+        f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_type:{user_id}",
+        option_type,
+        timeout=600,
+    )
+
+    # Start background thread (reuse Phase 7 logic)
+    scan_thread = threading.Thread(
+        target=run_individual_scan_in_background,
+        args=(user_id, ticker, option_type, weeks),
+        daemon=True,
+    )
+    scan_thread.start()
+
+    # Return polling partial
+    context = _get_individual_scan_context(user_id)
+    return render(request, 'scanner/partials/search_polling.html', context)
+
+
+@login_required
+@require_POST
+def edit_search_notes_view(request, pk):
+    """
+    Update notes field for saved search.
+
+    Args:
+        pk: SavedSearch primary key
+
+    POST params:
+        notes: Updated notes text
+
+    Returns HTMX partial with updated notes display.
+    """
+    saved_search = get_object_or_404(
+        SavedSearch.objects.active(),
+        pk=pk,
+        user=request.user
+    )
+
+    notes = request.POST.get('notes', '').strip()
+    saved_search.notes = notes
+    saved_search.save(update_fields=['notes'])
+
+    logger.info(f"User {request.user.id} updated notes for {saved_search.ticker} {saved_search.option_type}")
+
+    context = {
+        'search': saved_search,
+        'status': 'success',
+    }
+
+    return render(request, 'scanner/partials/search_notes_display.html', context)

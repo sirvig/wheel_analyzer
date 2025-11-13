@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CuratedStock, OptionsWatch, ValuationHistory
+from .models import CuratedStock, OptionsWatch, SavedSearch, ValuationHistory
 
 
 @admin.register(CuratedStock)
@@ -138,6 +138,15 @@ class ValuationHistoryAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
+@admin.register(SavedSearch)
+class SavedSearchAdmin(admin.ModelAdmin):
+    list_display = ['ticker', 'option_type', 'user', 'scan_count', 'last_scanned_at', 'created_at', 'is_deleted']
+    list_filter = ['option_type', 'is_deleted', 'created_at']
+    search_fields = ['ticker', 'user__username', 'notes']
+    readonly_fields = ['scan_count', 'last_scanned_at', 'created_at']
+    ordering = ['-created_at']
 
 
 # Register your models here.

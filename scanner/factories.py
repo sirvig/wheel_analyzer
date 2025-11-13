@@ -2,7 +2,7 @@ import factory
 
 from tracker.factories import UserFactory
 
-from .models import CuratedStock, OptionsWatch
+from .models import CuratedStock, OptionsWatch, SavedSearch
 
 
 class CuratedStockFactory(factory.django.DjangoModelFactory):
@@ -23,3 +23,17 @@ class OptionsWatchFactory(factory.django.DjangoModelFactory):
     active = factory.Iterator([True, False])
     type = factory.Iterator([x[0] for x in OptionsWatch.TYPE_CHOICES])
     strike_price = factory.Faker("pyfloat", left_digits=3, right_digits=2)
+
+
+class SavedSearchFactory(factory.django.DjangoModelFactory):
+    """Factory for creating SavedSearch test instances."""
+
+    class Meta:
+        model = SavedSearch
+
+    user = factory.SubFactory(UserFactory)
+    ticker = factory.Iterator(["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA"])
+    option_type = factory.Iterator(['put', 'call'])
+    notes = factory.Faker("sentence")
+    scan_count = factory.Faker("pyint", min_value=0, max_value=20)
+    is_deleted = False

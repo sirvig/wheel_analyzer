@@ -1,0 +1,263 @@
+{% extends '../base.html' %}
+
+{% block content %}
+
+<nav class="flex mb-6" aria-label="Breadcrumb">
+  <ol class="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse">
+    <li class="inline-flex items-center">
+      <a href="{% url 'scanner:index' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+        Scanner
+      </a>
+    </li>
+    <li aria-current="page">
+      <div class="flex items-center">
+        <svg class="rtl:rotate-180 w-3 h-3 text-gray-400 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
+          <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
+        </svg>
+        <span class="ms-1 text-sm font-medium text-gray-500 md:ms-2 dark:text-gray-400">My Saved Searches</span>
+      </div>
+    </li>
+  </ol>
+</nav>
+
+<div class="flex justify-between items-center mb-6">
+  <h1 class="text-2xl leading-none tracking-tight text-white md:text-3xl lg:text-4xl">
+    My Saved Searches
+  </h1>
+
+  <div class="flex gap-2">
+    <a href="{% url 'scanner:search' %}"
+       class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
+      + New Search
+    </a>
+  </div>
+</div>
+
+{% if messages %}
+  {% for message in messages %}
+    <div class="p-4 mb-4 text-sm {% if message.tags == 'success' %}text-green-800 bg-green-50 dark:bg-gray-800 dark:text-green-400{% else %}text-red-800 bg-red-50 dark:bg-gray-800 dark:text-red-400{% endif %} rounded-lg" role="alert">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+{% if searches %}
+  <div class="mb-4 flex justify-between items-center">
+    <p class="text-sm text-gray-400">
+      Showing {{ searches|length }} saved search{{ searches|length|pluralize:"es" }}
+    </p>
+
+    <div class="flex items-center gap-2">
+      <label for="sort-select" class="text-sm text-gray-400">Sort by:</label>
+      <select id="sort-select"
+              onchange="window.location.href='?sort=' + this.value"
+              class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
+        <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Date Added</option>
+        <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Ticker Name</option>
+        <option value="frequency" {% if sort_by == 'frequency' %}selected{% endif %}>Most Used</option>
+        <option value="recent" {% if sort_by == 'recent' %}selected{% endif %}>Recently Scanned</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="relative overflow-x-auto shadow-md sm:rounded-lg">
+    <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+      <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+        <tr>
+          <th scope="col" class="px-6 py-3">Ticker</th>
+          <th scope="col" class="px-6 py-3">Type</th>
+          <th scope="col" class="px-6 py-3">Notes</th>
+          <th scope="col" class="px-6 py-3">Scans</th>
+          <th scope="col" class="px-6 py-3">Last Scanned</th>
+          <th scope="col" class="px-6 py-3">Added</th>
+          <th scope="col" class="px-6 py-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for search in searches %}
+        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+          <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+            {{ search.ticker }}
+          </td>
+          <td class="px-6 py-4">
+            <span class="bg-{% if search.option_type == 'put' %}red{% else %}green{% endif %}-100 text-{% if search.option_type == 'put' %}red{% else %}green{% endif %}-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-{% if search.option_type == 'put' %}red{% else %}green{% endif %}-900 dark:text-{% if search.option_type == 'put' %}red{% else %}green{% endif %}-300">
+              {{ search.option_type|upper }}
+            </span>
+          </td>
+          <td class="px-6 py-4">
+            <div id="notes-display-{{ search.pk }}">
+              {% if search.notes %}
+                <p class="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs" title="{{ search.notes }}">
+                  {{ search.notes|linebreaksbr }}
+                </p>
+              {% else %}
+                <span class="text-xs text-gray-400 italic">No notes</span>
+              {% endif %}
+              <button onclick="showEditNotesModal({{ search.pk }}, '{{ search.notes|default:""|escapejs }}')"
+                      class="text-xs text-blue-600 hover:underline dark:text-blue-400 mt-1">
+                Edit
+              </button>
+            </div>
+          </td>
+          <td class="px-6 py-4">
+            {{ search.scan_count }}
+          </td>
+          <td class="px-6 py-4">
+            {% if search.last_scanned_at %}
+              {{ search.last_scanned_at|date:"M d, Y g:i A" }}
+            {% else %}
+              <span class="text-xs text-gray-400 italic">Never</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4">
+            {{ search.created_at|date:"M d, Y" }}
+          </td>
+          <td class="px-6 py-4 flex gap-2">
+            <form method="post" action="{% url 'scanner:quick_scan' search.pk %}"
+                  hx-post="{% url 'scanner:quick_scan' search.pk %}"
+                  hx-target="#search-results-container"
+                  hx-swap="innerHTML">
+              {% csrf_token %}
+              <button type="submit"
+                      class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-xs px-3 py-1.5 dark:bg-green-600 dark:hover:bg-green-700 focus:outline-none dark:focus:ring-green-800">
+                Quick Scan
+              </button>
+            </form>
+
+            <form method="post" action="{% url 'scanner:delete_search' search.pk %}"
+                  onsubmit="return confirm('Remove {{ search.ticker|escapejs }} {{ search.option_type|escapejs }}s from saved searches?')">
+              {% csrf_token %}
+              <button type="submit"
+                      class="text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:ring-red-300 font-medium rounded-lg text-xs px-3 py-1.5 dark:bg-red-600 dark:hover:bg-red-700 focus:outline-none dark:focus:ring-red-800">
+                Delete
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div id="search-results-container" class="mt-6">
+    <!-- Quick scan results appear here via HTMX -->
+  </div>
+
+{% else %}
+  <div class="p-8 text-center bg-gray-50 dark:bg-gray-800 rounded-lg">
+    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No saved searches</h3>
+    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      Save your frequently searched tickers for quick access.
+    </p>
+    <div class="mt-6">
+      <a href="{% url 'scanner:search' %}"
+         class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 focus:outline-none dark:focus:ring-blue-800">
+        Search a Stock
+      </a>
+    </div>
+  </div>
+{% endif %}
+
+<!-- Edit Notes Modal -->
+<div id="edit-notes-modal" tabindex="-1" aria-hidden="true" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 overflow-x-hidden overflow-y-auto bg-gray-900 bg-opacity-50">
+  <div class="relative w-full max-w-md">
+    <div class="relative bg-white rounded-lg shadow dark:bg-gray-700">
+      <div class="flex items-start justify-between p-4 border-b rounded-t dark:border-gray-600">
+        <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+          Edit Notes
+        </h3>
+        <button type="button" onclick="hideEditNotesModal()" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+        </button>
+      </div>
+
+      <form id="edit-notes-form" method="post"
+            hx-post=""
+            hx-target="#notes-display-"
+            hx-swap="innerHTML">
+        {% csrf_token %}
+        <div class="p-6 space-y-6">
+          <textarea id="notes-textarea" name="notes" rows="4"
+                    class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                    placeholder="Add notes (e.g., 'earnings play', 'dividend stock')"></textarea>
+        </div>
+
+        <div class="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b dark:border-gray-600">
+          <button type="submit"
+                  class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+            Save
+          </button>
+          <button type="button" onclick="hideEditNotesModal()"
+                  class="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function showEditNotesModal(searchId, currentNotes) {
+  console.log('[Modal] Opening modal for search ID:', searchId);
+  const modal = document.getElementById('edit-notes-modal');
+  const form = document.getElementById('edit-notes-form');
+  const textarea = document.getElementById('notes-textarea');
+
+  if (!modal || !form || !textarea) {
+    console.error('[Modal] Required elements not found');
+    return;
+  }
+
+  // Set form action URL
+  form.setAttribute('hx-post', `/scanner/searches/edit/${searchId}/`);
+  form.setAttribute('hx-target', `#notes-display-${searchId}`);
+
+  // Re-process HTMX attributes for the form
+  if (typeof htmx !== 'undefined') {
+    htmx.process(form);
+  }
+
+  // Set current notes
+  textarea.value = currentNotes;
+
+  // Show modal
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  console.log('[Modal] Modal opened');
+}
+
+function hideEditNotesModal() {
+  console.log('[Modal] Attempting to hide modal');
+  const modal = document.getElementById('edit-notes-modal');
+
+  if (!modal) {
+    console.error('[Modal] Modal element not found');
+    return;
+  }
+
+  const form = document.getElementById('edit-notes-form');
+  const textarea = document.getElementById('notes-textarea');
+
+  // Hide modal
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+
+  // Reset form
+  if (form) {
+    form.reset();
+  }
+
+  // Clear textarea
+  if (textarea) {
+    textarea.value = '';
+  }
+
+  console.log('[Modal] Modal hidden successfully');
+}
+</script>
+
+{% endblock content %}

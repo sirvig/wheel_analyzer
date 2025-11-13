@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.utils import timezone
 
 from .managers import OptionsWatchQuerySet
 
@@ -316,3 +318,102 @@ class OptionsWatch(models.Model):
 
     class Meta:
         verbose_name_plural = "Options Watch"
+
+
+class SavedSearchManager(models.Manager):
+    """Custom manager for SavedSearch with active filter."""
+
+    def active(self):
+        """Return only non-deleted saved searches."""
+        return self.filter(is_deleted=False)
+
+    def for_user(self, user):
+        """Return active searches for specific user."""
+        return self.active().filter(user=user)
+
+
+class SavedSearch(models.Model):
+    """
+    User's saved stock search for quick access.
+
+    Tracks frequently searched tickers with usage statistics
+    and optional categorization notes.
+    """
+
+    OPTION_TYPE_CHOICES = [
+        ('put', 'Put Options'),
+        ('call', 'Call Options'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='saved_searches',
+        help_text="User who saved this search"
+    )
+    ticker = models.CharField(
+        max_length=10,
+        help_text="Stock ticker symbol (uppercase)"
+    )
+    option_type = models.CharField(
+        max_length=4,
+        choices=OPTION_TYPE_CHOICES,
+        help_text="Type of options to scan"
+    )
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Optional notes for categorization (e.g., 'earnings play')"
+    )
+    scan_count = models.IntegerField(
+        default=0,
+        help_text="Number of times quick scan was executed"
+    )
+    last_scanned_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Timestamp of most recent scan execution"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When this search was saved"
+    )
+    is_deleted = models.BooleanField(
+        default=False,
+        help_text="Soft delete flag"
+    )
+
+    objects = SavedSearchManager()
+
+    class Meta:
+        db_table = 'scanner_saved_search'
+        verbose_name = 'Saved Search'
+        verbose_name_plural = 'Saved Searches'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_deleted']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['last_scanned_at']),
+            models.Index(fields=['scan_count']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'ticker', 'option_type'],
+                condition=models.Q(is_deleted=False),
+                name='unique_active_saved_search'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.ticker} {self.option_type}"
+
+    def increment_scan_count(self):
+        """Increment scan counter and update last scanned timestamp."""
+        self.scan_count += 1
+        self.last_scanned_at = timezone.now()
+        self.save(update_fields=['scan_count', 'last_scanned_at'])
+
+    def soft_delete(self):
+        """Mark as deleted without removing from database."""
+        self.is_deleted = True
+        self.save(update_fields=['is_deleted'])

@@ -19,4 +19,10 @@ urlpatterns = [
     path("search/", views.individual_search_view, name="search"),
     path("search/scan/", views.individual_scan_view, name="individual_scan"),
     path("search/status/", views.individual_scan_status_view, name="individual_scan_status"),
+    # Saved searches (Phase 7.1)
+    path("searches/", views.saved_searches_view, name="saved_searches"),
+    path("searches/save/", views.save_search_view, name="save_search"),
+    path("searches/delete/<int:pk>/", views.delete_search_view, name="delete_search"),
+    path("searches/scan/<int:pk>/", views.quick_scan_view, name="quick_scan"),
+    path("searches/edit/<int:pk>/", views.edit_search_notes_view, name="edit_search_notes"),
 ]
