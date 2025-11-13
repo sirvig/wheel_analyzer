@@ -80,6 +80,7 @@ class TestIndividualScanView:
                 {
                     'date': '2025-12-15',
                     'strike': 150.00,
+                    'change': 4.50,
                     'price': 3.50,
                     'delta': -0.15,
                     'annualized': 35.5,
@@ -213,6 +214,7 @@ class TestIndividualScanStatusView:
                 {
                     'date': '2025-12-15',
                     'strike': 150.00,
+                    'change': 5.25,  # Percent change from current price
                     'price': 3.50,
                     'delta': -0.15,
                     'annualized': 35.5,
@@ -245,6 +247,51 @@ class TestIndividualScanStatusView:
         # Assert
         assert response.status_code == 302  # Redirect to login
         assert '/accounts/login/' in response.url
+
+    def test_status_view_displays_percent_change_column(self, client, user):
+        """Test that results table includes Strike vs Price percent change column."""
+        # Arrange
+        client.force_login(user)
+
+        # Set scan completed with results
+        lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_lock:{user.id}"
+        cache.delete(lock_key)
+
+        results = {
+            'ticker': 'MSFT',
+            'option_type': 'call',
+            'options': [
+                {
+                    'date': '2025-12-20',
+                    'strike': 350.00,
+                    'change': 3.45,  # Percent change
+                    'price': 4.25,
+                    'delta': 0.18,
+                    'annualized': 32.1,
+                    'iv': 24.5,
+                }
+            ],
+            'has_intrinsic_value': False,
+            'timestamp': '2025-11-13 10:00:00',
+        }
+        cache.set(
+            f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_results:{user.id}",
+            results,
+            timeout=600
+        )
+
+        # Act
+        response = client.get(reverse('scanner:individual_scan_status'))
+
+        # Assert
+        assert response.status_code == 200
+        content = response.content.decode('utf-8')
+
+        # Verify column header exists
+        assert 'Strike vs Price' in content
+
+        # Verify percent change value is displayed
+        assert '3.45%' in content
 
 
 @pytest.mark.django_db
@@ -370,6 +417,7 @@ class TestIntrinsicValueConditionalDisplay:
                 {
                     'date': '2025-12-15',
                     'strike': 145.00,  # Below IV
+                    'change': 3.25,
                     'price': 3.50,
                     'delta': -0.15,
                     'annualized': 35.5,
@@ -420,6 +468,7 @@ class TestIntrinsicValueConditionalDisplay:
                 {
                     'date': '2025-12-15',
                     'strike': 200.00,
+                    'change': -2.15,
                     'price': 5.00,
                     'delta': -0.18,
                     'annualized': 32.0,

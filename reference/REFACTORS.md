@@ -3,6 +3,19 @@
 Pending:
 
 Completed:
+- ✅ **Strike vs Price Column** - Added "Strike vs Price" percent change column to individual stock scanner results table at `/scanner/search/`. The column displays the percent change from the current stock price to the strike price, helping users quickly assess whether strikes are above or below the current market price. The data was already calculated by the `find_options()` function as `option['change']` but wasn't displayed. Now appears as third column (after Strike, before Premium) formatted as percentage with 2 decimal places. Plain text display without color coding for cleaner appearance. Updated all test fixtures to include `change` field and added dedicated test to verify column rendering. All 340 tests passing.
+  - **Files Changed**:
+    - Modified: `templates/scanner/partials/search_results.html` (added column header and data cell)
+    - Modified: `scanner/tests/test_individual_scan_views.py` (updated 4 mock data fixtures, added 1 new test)
+  - **Implementation Details**:
+    - Column header: "Strike vs Price" (between Strike and Premium columns)
+    - Display format: `{{ option.change|floatformat:2 }}%` (e.g., "5.25%", "-2.15%")
+    - No color coding: Plain text for consistent, clean UI
+    - Data source: Already calculated by `calculate_percent_change(strike_price, underlying_price)` in `scanner/marketdata/util.py`
+  - **Testing**:
+    - Added `test_status_view_displays_percent_change_column()` to verify column header and value appear in HTML
+    - Updated 4 existing test fixtures to include `change` field in mock data
+    - All 340 tests passing (100% pass rate)
 - ✅ **LOCAL Environment Market Hours Bypass** - Implemented ability to run options scans outside market hours when `ENVIRONMENT=LOCAL`. This development-only feature allows testing and debugging the scanner functionality without waiting for market hours (9:30 AM - 4:00 PM ET). The scanner now checks `settings.ENVIRONMENT` and passes `debug=True` to `perform_scan()` when in LOCAL mode, bypassing the `is_market_open()` check. Added amber warning banners to both `scan_polling.html` and `options_results.html` to alert developers that data may be stale when scans run outside market hours. Created `.env.example` with ENVIRONMENT documentation. Added comprehensive tests to verify LOCAL bypass behavior and PRODUCTION enforcement.
   - **Files Changed**:
     - Modified: `wheel_analyzer/settings.py` (added `ENVIRONMENT` setting with default "PRODUCTION")
