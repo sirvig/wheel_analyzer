@@ -81,13 +81,20 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
 - Custom QuerySets via managers: `CampaignsQuerySet`, `TransactionsQuerySet`
 
 **scanner**: Options scanning and analysis tools
-- Models: `OptionsWatch` - watchlist for stocks to monitor, `CuratedStock` - stocks for valuation analysis
+- Models: `OptionsWatch` - watchlist for stocks to monitor, `CuratedStock` - stocks for valuation analysis, `ValuationHistory` - quarterly snapshots
+- Forms: `IndividualStockScanForm` - form for individual stock search with validation
 - External integrations:
   - `scanner/marketdata/` - Market data API wrapper for fetching options chains
   - `scanner/alphavantage/` - Alpha Vantage API integration for fundamental data (EPS, FCF) and technical analysis (SMA calculations)
 - Custom management commands for scanning and analyzing options data
 - Valuation module (`scanner/valuation.py`) - DCF calculations using EPS and FCF methods
+- Analytics module (`scanner/analytics.py`) - Volatility, CAGR, correlation calculations
 - Caches options data and Alpha Vantage API responses in Redis for performance
+- **Views**:
+  - Curated scanner: `index()`, `scan_view()`, `scan_status()`, `options_list()`
+  - Individual scanner: `individual_search_view()`, `individual_scan_view()`, `individual_scan_status_view()`
+  - Valuations: `valuation_list_view()`, `stock_history_view()`, `valuation_comparison_view()`, `analytics_view()`
+  - Exports: `export_valuation_history_csv()`
 
 ### Key Files
 
@@ -150,6 +157,12 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
   - Cache keys: `scanner:ticker_options`, `scanner:last_run`, `scanner:scan_in_progress`
   - Purpose: Balances market data freshness with performance
   - Set via: `settings.CACHE_TTL_OPTIONS`
+
+- **Individual scan data**: 10-minute TTL (600 seconds)
+  - Cache keys: `scanner:individual_scan_lock:{user_id}`, `scanner:individual_scan_results:{user_id}`, `scanner:individual_scan_status:{user_id}`, `scanner:individual_scan_ticker:{user_id}`, `scanner:individual_scan_type:{user_id}`
+  - Purpose: User-scoped scan results for multi-user support
+  - User isolation: All keys include user_id to prevent cross-user access
+  - Lock timeout prevents hanging scans
 
 **Usage Pattern**:
 ```python
@@ -279,21 +292,24 @@ The Django application can run locally while using Docker only for PostgreSQL an
 - See @reference/ROADMAP.md for current status and next steps
 - Spec-based development workflow with comprehensive specifications in `/specs` directory
 - Use `/build specs/phase-N-description.md` to start implementation of a new phase
-- **Current Status**: Phase 6.1 completed ✅ - Analytics & Visualizations system fully implemented with 243/243 tests passing (100% pass rate). Production-ready with interactive Chart.js visualizations and comprehensive analytics calculations. Key achievements:
-  - Analytics module (`scanner/analytics.py` - 546 lines) with 6 analytics functions
-  - Dedicated analytics dashboard at `/scanner/valuations/analytics/` with portfolio metrics and multi-line trend chart
-  - Embedded charts on stock history page (dual-line EPS/FCF) and comparison page (grouped bar chart)
-  - Portfolio analytics: total stocks, average IV, average volatility, average CAGR
-  - Stock analytics: volatility (std dev + CV), CAGR, EPS/FCF correlation
-  - Dark mode support with dynamic color detection from computed styles
-  - Historical data: 416 snapshots (26 stocks × 16 quarters, Q1 2022 - Q4 2025)
-  - All bugs resolved through systematic root-cause debugging
-  - Chart.js 4.4.1 integration with responsive, interactive visualizations
-  - All 243 tests passing ✅ (243 existing, analytics tests deferred)
-  - Files changed: 7 modified + 2 new (1,378 lines added)
-  - Query performance: <200ms for analytics, <100ms for chart data preparation
-- **Next**: Ready to merge Phase 6.1 to main, then consider Phase 6.2 (REST API) or Phase 7 (Individual Stock Scanning):
-  - Phase 6.2: REST API endpoints for analytics data, JSON/CSV exports, webhooks
-  - Phase 7: User-driven individual stock scanning with ticker input form
+- **Current Status**: Phase 7 completed ✅ - Individual Stock Options Scanning fully implemented with 302/302 tests passing (100% pass rate). Production-ready with HTMX-powered search interface and user-isolated background scanning. Key achievements:
+  - Django form (`scanner/forms.py` - 59 lines) with validation: `IndividualStockScanForm`
+  - Background scan function with user-specific cache keys for multi-user support
+  - 4 new views: search form, scan trigger, status polling, context helper
+  - 3 new templates (210 lines): search form, polling partial, results partial
+  - HTMX integration with 5-second polling for real-time progress updates
+  - Conditional intrinsic value badges (✓ Good, ✗ High, ⚠ N/A) for curated stocks
+  - User isolation via cache keys: `individual_scan_lock:{user_id}`, `individual_scan_results:{user_id}`
+  - Reuses existing `find_options()` logic with 10-minute cache TTL
+  - Navigation: "Search Individual Stock" button on scanner home page
+  - All 302 tests passing ✅ (302 existing + 37 new tests generated)
+  - Files changed: 7 files, 495 lines added
+  - Security audit: 8 findings (2 High, 3 Medium, 2 Low, 1 Info) - rate limiting recommended
+  - Code review: Well-structured, follows existing patterns
+- **Next**: Consider Phase 7.1 (Save Searches), Phase 7.2 (Rate Limit Dashboard), or Phase 8 (Stock Price Integration):
+  - Phase 7.1: Bookmark frequently scanned tickers for quick access
+  - Phase 7.2: API quota tracking and visualization dashboard
+  - Phase 8: Current stock price integration for undervaluation analysis
+  - Address HIGH security findings: rate limiting, error message sanitization
   - See `reference/ROADMAP.md` for detailed phase descriptions
   

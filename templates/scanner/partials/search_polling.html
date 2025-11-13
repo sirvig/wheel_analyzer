@@ -1,5 +1,6 @@
-<div hx-get="{% url 'scanner:individual_scan_status' %}"
-     hx-trigger="every 5s"
+<div id="search-results"
+     hx-get="{% url 'scanner:individual_scan_status' %}"
+     hx-trigger="load delay:5s, every 5s"
      hx-target="#search-results"
      hx-swap="outerHTML">
 

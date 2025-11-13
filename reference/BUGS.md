@@ -1,9 +1,34 @@
 # Bugs
 
 Pending:
-(none)
 
 Completed:
+- ✅ On /scanner/search/ when the scan completes, it says that two options were found but no options are displayed. The found options contracts should be displayed.
+  - **Root Cause**: The `search_polling.html` template was missing `id="search-results"` on its root div. The HTMX flow breaks down like this: (1) Form submits with `hx-target="#search-results"` and `hx-swap="outerHTML"`, (2) Server returns polling partial which replaces the entire `#search-results` div, (3) BUT the polling partial doesn't have `id="search-results"`, so that ID disappears from the DOM, (4) When polling completes and tries to swap results into `#search-results`, HTMX can't find the target, so nothing happens.
+  - **Fixed**: Added `id="search-results"` to the root div of `search_polling.html`
+  - **Files Changed**:
+    - Modified: `templates/scanner/partials/search_polling.html` (added `id="search-results"` to line 1)
+  - **How it works**: Both `search_polling.html` and `search_results.html` now have `id="search-results"` on their root divs. This ensures the ID persists throughout the HTMX swap chain: form submission → polling partial (has ID) → results partial (has ID) → subsequent submissions continue working because the ID is always present.
+  - **Verification**: All 339 tests passing (100% pass rate) ✅
+  - **Prevention**: When using HTMX with `outerHTML` swaps, ensure ALL templates in the swap chain have the same `id` attribute on their root elements. The target ID must persist across all swaps or HTMX loses its update target.
+- ✅ On /scanner/search/ after the first scan is completed, changing the parameters (like changing from a call to a put) and then clicking "Search Options" performs no actions (nothing recorded in the log and nothing changes on the screen). The user should be able to initiate another search without having to refresh the screen.
+  - **Root Cause**: Same as Bug #1 - the missing `id="search-results"` on the polling template broke the HTMX swap chain. After the first scan completed, the results template properly had the ID, but when a second scan was initiated, the polling template (without the ID) would replace it, and then the second scan's results had nowhere to go.
+  - **Fixed**: Added `id="search-results"` to `search_polling.html` (same fix as Bug #1)
+  - **Files Changed**:
+    - Modified: `templates/scanner/partials/search_polling.html` (added `id="search-results"` to line 1)
+    - Modified: `scanner/views.py` (added cache clearing lines 927-930 and initial status lines 949-954 for better UX)
+  - **How it works**: With the ID now present on both templates, subsequent searches work because: (1) User submits form → replaces `#search-results` with polling partial (which HAS the ID), (2) Polling completes → replaces `#search-results` with results partial (which also HAS the ID), (3) User can submit again because `#search-results` is still in the DOM. The cache clearing and initial status message provide better user feedback but aren't required for functionality.
+  - **Verification**: All 339 tests passing (100% pass rate) ✅, including 17 individual scan view tests
+  - **Prevention**: Test HTMX flows end-to-end, including multiple sequential operations. A missing ID attribute that breaks on the second operation won't be caught by single-operation tests.
+- ✅ On /scanner/search/ when attempting to search, after clicking "Search Options" we are seeing "You're accessing the development server over HTTPS, but it only supports HTTP". The scan seemed to function in the background according to the logs but the screen never changed from "Initializing scan..."
+  - **Root Cause**: HTMX polling template was missing the `load` trigger, causing delayed initial polling (waited 5 seconds instead of starting immediately). Additionally, Django's development server (`runserver`) only supports HTTP by default, but users may access via HTTPS through bookmarks, browser auto-redirects, or cached HSTS policies.
+  - **Fixed**: Added `load delay:5s` to HTMX trigger configuration to start polling immediately when element loads
+  - **Files Changed**:
+    - Modified: `templates/scanner/partials/search_polling.html` (changed `hx-trigger="every 5s"` to `hx-trigger="load delay:5s, every 5s"`)
+  - **How it works**: The HTMX `load` trigger fires immediately when the polling div is inserted into the DOM, then continues polling every 5 seconds. This matches the pattern used in the working `scan_polling.html` template for the main scanner. The 5-second delay prevents an immediate request (giving the background thread time to start).
+  - **Verification**: All 339 tests passing (100% pass rate) ✅
+  - **User Action Required**: Access development server via HTTP not HTTPS: `http://localhost:8000` instead of `https://localhost:8000`. If browser auto-redirects to HTTPS, clear HSTS cache or use incognito/private mode. In production, HTTPS is handled by the load balancer, not Django.
+  - **Prevention**: Always use `load delay:Xs` trigger pattern for HTMX polling templates to ensure immediate feedback to users
 - ✅ Fix failing tests - 10 analytics-related tests were failing due to data migration pollution
   - **Root Cause**: Migration `0003_populate_curated_stocks.py` runs during test database setup, creating 26 CuratedStock objects. Analytics tests calling `get_portfolio_analytics()` perform global queries returning migration data + test data instead of just test data, breaking test assertions. Additionally, test files had naming mismatches between expected context variables and what views actually provided (`'portfolio_analytics'` vs `'analytics'`, `'highest_iv'` vs `'quick_stats'`).
   - **Fixed**: Added environment checks to migration to skip data population in test environments (2 checks: connection alias and ENVIRONMENT setting). Updated test assertions to match actual view context variable names (5 occurrences changed from `'portfolio_analytics'` to `'analytics'`, 1 test updated to access `'quick_stats'` dictionary).

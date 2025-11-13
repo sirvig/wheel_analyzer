@@ -826,9 +826,12 @@ def run_individual_scan_in_background(user_id, ticker, option_type, weeks):
         try:
             curated_stock = CuratedStock.objects.get(symbol=ticker, active=True)
             has_intrinsic_value = True
+            intrinsic_value = float(curated_stock.get_effective_intrinsic_value()) if curated_stock.get_effective_intrinsic_value() else None
+            valuation_method = curated_stock.preferred_valuation_method
         except CuratedStock.DoesNotExist:
-            curated_stock = None
             has_intrinsic_value = False
+            intrinsic_value = None
+            valuation_method = None
 
         # Store results
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -839,7 +842,8 @@ def run_individual_scan_in_background(user_id, ticker, option_type, weeks):
                 'ticker': ticker,
                 'option_type': option_type,
                 'options': options,
-                'curated_stock': curated_stock,
+                'intrinsic_value': intrinsic_value,
+                'valuation_method': valuation_method,
                 'has_intrinsic_value': has_intrinsic_value,
                 'timestamp': timestamp,
             },
@@ -920,6 +924,11 @@ def individual_scan_view(request):
         context = _get_individual_scan_context(user_id)
         return render(request, 'scanner/partials/search_polling.html', context)
 
+    # Clear any previous scan results before starting new scan
+    prefix = settings.CACHE_KEY_PREFIX_SCANNER
+    cache.delete(f"{prefix}:individual_scan_results:{user_id}")
+    cache.delete(f"{prefix}:individual_scan_status:{user_id}")
+
     # Set lock
     cache.set(lock_key, True, timeout=600)
 
@@ -936,6 +945,13 @@ def individual_scan_view(request):
     )
 
     logger.info(f"Starting individual scan for user {user_id}: {ticker} {option_type}s")
+
+    # Set initial status for immediate feedback
+    cache.set(
+        f"{prefix}:individual_scan_status:{user_id}",
+        f"Initializing scan for {ticker} {option_type} options...",
+        timeout=600,
+    )
 
     # Start background thread
     scan_thread = threading.Thread(
