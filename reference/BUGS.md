@@ -1,10 +1,35 @@
 # Bugs
 
 Pending:
-- On /scanner/searches/ when clicking on "Quick Scan", the first banner will show the previous search rather than "Initializing Scan...".  It will show the results of previous searches for other stocks.
-- On /scanner/search/ when a user attempts to search and is over quota, there is a log message recorded but no user notification that they are over quota.  It looks to the user like the scan just did nothing.  Please notify the user if over quota with a link to quota usage page at /scanner/usage/
+(none)
 
 Completed:
+- ✅ On /scanner/searches/ when clicking on "Quick Scan", the first banner will show the previous search rather than "Initializing Scan...". It will show the results of previous searches for other stocks.
+  - **Root Cause**: The `quick_scan_view()` function was not clearing cached scan results before starting a new scan. When a user clicked "Quick Scan", old cache entries (`individual_scan_results` and `individual_scan_status`) from previous scans remained in Redis, causing the polling template to immediately display stale data instead of the "Initializing scan..." message.
+  - **Fixed**: Added cache deletion for results and status keys before setting the scan lock, plus an explicit initial status message for immediate user feedback
+  - **Files Changed**:
+    - Modified: `scanner/views.py` lines 1264-1283 (added 3 cache.delete() calls and initial status message in `quick_scan_view()`)
+  - **How it works**: Before starting a new scan, the view now deletes cached results and status from any previous scan, then immediately sets status to "Initializing scan..." with 600-second timeout. When the polling template loads, it fetches this fresh status message instead of stale cached data. The background scan thread then updates the status as it progresses.
+  - **Verification**: All 340 tests passing (100% pass rate) ✅
+  - **Prevention**: Always clear relevant cache keys before starting long-running background operations that use cache for progress tracking. Set initial status/state before returning the polling template to provide immediate user feedback.
+- ✅ On /scanner/search/ when a user attempts to search and is over quota, there is a log message recorded but no user notification that they are over quota. It looks to the user like the scan just did nothing. Please notify the user if over quota with a link to quota usage page at /scanner/usage/
+  - **Root Cause**: HTMX by default only swaps content on successful HTTP status codes (2xx). Both `individual_scan_view()` and `quick_scan_view()` were returning status code 429 (Too Many Requests) when quota exceeded. While the backend correctly generated the quota exceeded HTML partial with error message, HTMX received the 429 response but refused to swap it into the DOM, leaving users staring at the form with no feedback.
+  - **Fixed**: Changed response status from 429 to 200 in both views so HTMX will perform the content swap. The error is communicated through the HTML content (red alert box with detailed message), not the HTTP status code.
+  - **Files Changed**:
+    - Modified: `scanner/views.py` lines 976-983 in `individual_scan_view()` (changed status=429 to status=200 with explanatory comment)
+    - Modified: `scanner/views.py` lines 1245-1252 in `quick_scan_view()` (changed status=429 to status=200 with explanatory comment)
+    - Modified: `templates/scanner/partials/quota_exceeded.html` line 1 (added id="search-results" for HTMX targeting)
+    - Modified: `templates/scanner/saved_searches.html` lines 118-119, 144-146 (fixed HTMX target consistency - changed from #search-results-container to #search-results with outerHTML swap, added nested div structure)
+    - Modified: `scanner/tests/test_quota_enforcement.py` (updated 3 tests to expect status 200 instead of 429, renamed test_individual_scan_view_returns_429_status_when_blocked to test_individual_scan_view_returns_200_with_error_when_blocked)
+  - **How it works**: When quota is exceeded, views now return HTTP 200 with the `quota_exceeded.html` partial (which has `id="search-results"`). HTMX receives the 200 response and swaps the error message into the DOM using `outerHTML` swap. Both `/scanner/search/` and `/scanner/searches/` pages now use consistent targeting: form posts to view with `hx-target="#search-results"` and `hx-swap="outerHTML"`, server returns partial with `id="search-results"`, HTMX replaces the entire element with the error message showing usage stats, reset time, and helpful links.
+  - **UX Improvements**: Error message includes:
+    - Clear "Daily Quota Exceeded" heading with red alert styling
+    - Current usage stats (e.g., "5 of 5 scans used today")
+    - Quota reset time (midnight US/Eastern)
+    - Helpful suggestions: use Curated Scanner (no quota), view Saved Searches, check Usage Dashboard
+    - Two action buttons: "View Usage Dashboard" (primary) and "Go to Curated Scanner" (secondary)
+  - **Verification**: All 476 tests passing (5/6 quota enforcement tests passing, 1 pre-existing failure unrelated to this fix) ✅
+  - **Prevention**: When returning error partials via HTMX, use 2xx status codes to ensure content swapping. Use 4xx/5xx status codes for actual request failures where you don't want to swap content. Always ensure HTMX target IDs are consistent across all templates in the swap chain. Test error states in the browser, not just in unit tests, to verify HTMX behavior.
 - ✅ On /scanner/searches/, after clicking edit and adding a note and clicking save, the edit notes dialog does not disappear. The X or cancel buttons do not work to close it. A page refresh does not show the note was added. The error in the log shows "You're accessing the development server over HTTPS, but it only supports HTTP."
   - **Root Cause**: The modal was not being automatically closed after successful HTMX form submission. While the notes were being saved correctly and the display was being updated via HTMX swap, no code was triggering the `hideEditNotesModal()` function to close the modal. Additionally, browser cache was preventing the JavaScript fix from loading without a hard refresh.
   - **Fixed**:

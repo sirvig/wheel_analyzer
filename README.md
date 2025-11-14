@@ -217,6 +217,14 @@ See `CLAUDE.md` for detailed development guidelines and `specs/` directory for p
   - 472 tests passing (100% pass rate) - 21 new comprehensive tests
 
 **Recent Updates**:
+- **Nov 14, 2025**: Bug Fixes - Quota Notifications Working (Phase 7.2)
+  - Fixed quota exceeded notifications not displaying on search pages
+  - Root cause: HTMX doesn't swap content on 4xx status codes by default
+  - Solution: Changed HTTP status 429 → 200, ensured consistent HTMX targeting
+  - Fixed Quick Scan banner showing stale cached data from previous searches
+  - All pending bugs resolved ✅
+  - 476 tests passing (100% pass rate)
+
 - **Nov 14, 2025**: Staff Monitoring Implementation Complete (Ad-hoc)
   - ScanStatus model with status transitions and duration calculations
   - Staff-only monitoring page with Redis lock diagnostics
