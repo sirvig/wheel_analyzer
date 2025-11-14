@@ -300,10 +300,8 @@ class TestScanView:
         response = client.post(reverse("scanner:scan"))
 
         assert response.status_code == 200
-        # Verify perform_scan was called
-        mock_perform_scan.assert_called_once_with(debug=False)
 
-        # Verify data was stored in cache (wait for background thread to complete)
+        # Wait for background thread to complete before checking assertions
         import time
 
         ticker_options = None
@@ -314,6 +312,9 @@ class TestScanView:
             if ticker_options is not None:
                 break
             time.sleep(0.1)
+
+        # Verify perform_scan was called (after thread completes)
+        mock_perform_scan.assert_called_once_with(debug=False)
         assert ticker_options is not None
 
     @patch("scanner.views.perform_scan")
@@ -518,7 +519,8 @@ class TestValuationListView:
         client.force_login(user)
         response = client.get("/scanner/valuations/")
 
-        stocks = response.context["stocks"]
+        stocks_with_discount = response.context["stocks_with_discount"]
+        stocks = [item['stock'] for item in stocks_with_discount]
 
         # Should include active stocks
         assert active1 in stocks
@@ -528,27 +530,43 @@ class TestValuationListView:
         assert inactive not in stocks
 
     @pytest.mark.django_db
-    def test_valuation_list_ordered_by_symbol(self, client, user):
-        """Valuation list is ordered alphabetically by symbol."""
+    def test_valuation_list_ordered_by_discount(self, client, user):
+        """Valuation list is ordered by discount percentage (highest first)."""
+        from decimal import Decimal
         from scanner.factories import CuratedStockFactory
 
-        # Create stocks in non-alphabetical order
-        CuratedStockFactory(symbol="ZTEST", active=True)
-        CuratedStockFactory(symbol="BTEST", active=True)
-        CuratedStockFactory(symbol="MTEST", active=True)
+        # Create stocks with different discounts (current_price < intrinsic_value = discount)
+        stock1 = CuratedStockFactory(
+            symbol="ZTEST",
+            active=True,
+            intrinsic_value=Decimal("100.00"),
+            current_price=Decimal("90.00"),  # 10% discount
+        )
+        stock2 = CuratedStockFactory(
+            symbol="BTEST",
+            active=True,
+            intrinsic_value=Decimal("100.00"),
+            current_price=Decimal("70.00"),  # 30% discount
+        )
+        stock3 = CuratedStockFactory(
+            symbol="MTEST",
+            active=True,
+            intrinsic_value=Decimal("100.00"),
+            current_price=Decimal("80.00"),  # 20% discount
+        )
 
         client.force_login(user)
         response = client.get("/scanner/valuations/")
 
-        stocks = response.context["stocks"]
-        symbols = [stock.symbol for stock in stocks]
+        stocks_with_discount = response.context["stocks_with_discount"]
+        discounts = [item['discount_pct'] for item in stocks_with_discount if item['discount_pct'] is not None]
 
-        # Should be in alphabetical order
-        assert symbols == sorted(symbols)
+        # Should be in descending order (highest discount first)
+        assert discounts == sorted(discounts, reverse=True)
 
     @pytest.mark.django_db
     def test_valuation_list_context_includes_stocks(self, client, user):
-        """Valuation list context includes stocks queryset."""
+        """Valuation list context includes stocks_with_discount list."""
         from scanner.factories import CuratedStockFactory
 
         stock = CuratedStockFactory(symbol="CTEST", active=True)
@@ -556,11 +574,12 @@ class TestValuationListView:
         client.force_login(user)
         response = client.get("/scanner/valuations/")
 
-        # Should have stocks in context
-        assert "stocks" in response.context
+        # Should have stocks_with_discount in context
+        assert "stocks_with_discount" in response.context
 
-        stocks = response.context["stocks"]
-        assert stocks.count() > 0
+        stocks_with_discount = response.context["stocks_with_discount"]
+        assert len(stocks_with_discount) > 0
+        stocks = [item['stock'] for item in stocks_with_discount]
         assert stock in stocks
 
     @pytest.mark.django_db
@@ -574,9 +593,9 @@ class TestValuationListView:
         client.force_login(user)
         response = client.get("/scanner/valuations/")
 
-        # Should still succeed with empty queryset
+        # Should still succeed with empty list
         assert response.status_code == 200
-        assert response.context["stocks"].count() == 0
+        assert len(response.context["stocks_with_discount"]) == 0
 
     @pytest.mark.django_db
     def test_valuation_list_displays_intrinsic_values(self, client, user):
@@ -606,7 +625,8 @@ class TestValuationListView:
         # Should succeed without errors
         assert response.status_code == 200
 
-        stocks = response.context["stocks"]
+        stocks_with_discount = response.context["stocks_with_discount"]
+        stocks = [item['stock'] for item in stocks_with_discount]
         assert stock_with_values in stocks
         assert stock_without_values in stocks
 

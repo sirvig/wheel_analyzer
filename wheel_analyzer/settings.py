@@ -138,6 +138,14 @@ CACHE_KEY_PREFIX_ALPHAVANTAGE = "alphavantage"
 CACHE_KEY_PREFIX_SCANNER = "scanner"
 
 
+# =============================================================================
+# EXTERNAL API CONFIGURATION
+# =============================================================================
+
+# Marketdata.app API
+MD_API_KEY = env("MD_API_KEY", default="")
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 

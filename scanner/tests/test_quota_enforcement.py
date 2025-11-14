@@ -196,10 +196,19 @@ class TestQuotaEnforcement:
 
         # Mock the curated scan
         with patch('scanner.views.perform_scan') as mock_scan:
-            mock_scan.return_value = []
+            mock_scan.return_value = {
+                "success": True,
+                "message": "Scan completed",
+                "scanned_count": 0,
+                "scan_results": {}
+            }
 
             # Act
             response = self.client.post(reverse('scanner:scan'))
+
+            # Wait for background thread to complete
+            import time
+            time.sleep(0.5)
 
         # Assert
         # Curated scan should succeed even though individual quota is exceeded

@@ -218,6 +218,10 @@ class TestScanMonitorView:
 
     def test_scan_monitor_no_scans(self, client, staff_user, db):
         """Test page when no scans exist."""
+        # Explicitly clear any scan status objects from previous tests
+        from scanner.models import ScanStatus
+        ScanStatus.objects.all().delete()
+
         client.force_login(staff_user)
         url = reverse('scanner:scan_monitor')
         response = client.get(url)

@@ -103,6 +103,20 @@ class CuratedStock(models.Model):
         help_text="Preferred valuation method to display",
     )
 
+    # Phase 8: Stock Price Integration
+    current_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Latest stock price from marketdata API"
+    )
+    price_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when price was last fetched"
+    )
+
     def __str__(self):
         return self.symbol
 
@@ -125,10 +139,82 @@ class CuratedStock(models.Model):
         else:  # Default to EPS
             return self.intrinsic_value
 
+    def get_discount_percentage(self):
+        """
+        Calculate discount percentage: ((IV - price) / IV) * 100
+
+        Returns:
+            Decimal: Discount percentage (positive = undervalued, negative = overvalued)
+            None: If current_price or intrinsic_value is missing
+        """
+        if not self.current_price:
+            return None
+
+        intrinsic_value = self.get_effective_intrinsic_value()
+        if not intrinsic_value or intrinsic_value == 0:
+            return None
+
+        discount = ((intrinsic_value - self.current_price) / intrinsic_value) * 100
+        return round(discount, 1)
+
+    def get_undervaluation_tier(self):
+        """
+        Get color tier for undervaluation badge.
+
+        Returns:
+            str: 'slate', 'yellow', 'orange', 'green', 'overvalued', or None
+        """
+        discount = self.get_discount_percentage()
+        if discount is None:
+            return None
+
+        if discount < 0:
+            return 'overvalued'  # Price > IV
+        elif discount < 10:
+            return 'slate'  # 0-9%
+        elif discount < 20:
+            return 'yellow'  # 10-19%
+        elif discount < 30:
+            return 'orange'  # 20-29%
+        else:
+            return 'green'  # 30%+
+
+    def is_undervalued(self):
+        """Check if stock is currently undervalued (price < intrinsic value)."""
+        if not self.current_price:
+            return False
+
+        intrinsic_value = self.get_effective_intrinsic_value()
+        if not intrinsic_value:
+            return False
+
+        return self.current_price < intrinsic_value
+
+    def is_price_stale(self, hours=24):
+        """Check if price data is older than specified hours."""
+        if not self.price_updated_at:
+            return True
+
+        from datetime import timedelta
+        threshold = timezone.now() - timedelta(hours=hours)
+        return self.price_updated_at < threshold
+
+    @property
+    def price_age_display(self):
+        """Human-readable price age (e.g., '2 hours ago', 'yesterday')."""
+        if not self.price_updated_at:
+            return "Never"
+
+        from django.utils.timesince import timesince
+        return f"{timesince(self.price_updated_at)} ago"
+
     class Meta:
         ordering = ["symbol"]
         verbose_name = "Curated Stock"
         verbose_name_plural = "Curated Stocks"
+        indexes = [
+            models.Index(fields=['price_updated_at']),  # Phase 8: Price staleness queries
+        ]
 
 
 class ValuationHistory(models.Model):
