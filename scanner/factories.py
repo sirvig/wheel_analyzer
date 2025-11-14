@@ -2,7 +2,7 @@ import factory
 
 from tracker.factories import UserFactory
 
-from .models import CuratedStock, OptionsWatch, SavedSearch
+from .models import CuratedStock, OptionsWatch, SavedSearch, ScanUsage, UserQuota
 
 
 class CuratedStockFactory(factory.django.DjangoModelFactory):
@@ -37,3 +37,25 @@ class SavedSearchFactory(factory.django.DjangoModelFactory):
     notes = factory.Faker("sentence")
     scan_count = factory.Faker("pyint", min_value=0, max_value=20)
     is_deleted = False
+
+
+class ScanUsageFactory(factory.django.DjangoModelFactory):
+    """Factory for creating ScanUsage test instances."""
+
+    class Meta:
+        model = ScanUsage
+
+    user = factory.SubFactory(UserFactory)
+    scan_type = factory.Iterator(['individual', 'curated'])
+    ticker = factory.Iterator(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', None])
+    # timestamp auto-populated by model
+
+
+class UserQuotaFactory(factory.django.DjangoModelFactory):
+    """Factory for creating UserQuota test instances."""
+
+    class Meta:
+        model = UserQuota
+
+    user = factory.SubFactory(UserFactory)
+    daily_limit = 25

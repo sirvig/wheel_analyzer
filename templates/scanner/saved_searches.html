@@ -115,8 +115,8 @@
           <td class="px-6 py-4 flex gap-2">
             <form method="post" action="{% url 'scanner:quick_scan' search.pk %}"
                   hx-post="{% url 'scanner:quick_scan' search.pk %}"
-                  hx-target="#search-results-container"
-                  hx-swap="innerHTML">
+                  hx-target="#search-results"
+                  hx-swap="outerHTML">
               {% csrf_token %}
               <button type="submit"
                       class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-xs px-3 py-1.5 dark:bg-green-600 dark:hover:bg-green-700 focus:outline-none dark:focus:ring-green-800">
@@ -141,6 +141,9 @@
 
   <div id="search-results-container" class="mt-6">
     <!-- Quick scan results appear here via HTMX -->
+    <div id="search-results">
+      <!-- Results will be swapped here -->
+    </div>
   </div>
 
 {% else %}

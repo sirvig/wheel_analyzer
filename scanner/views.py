@@ -2,22 +2,32 @@ import csv
 import json
 import logging
 import threading
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db import IntegrityError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_POST
 
-from django.views.decorators.cache import cache_page
 from django_ratelimit.decorators import ratelimit
 from scanner.analytics import get_portfolio_analytics, get_stock_analytics
 from scanner.forms import IndividualStockScanForm
-from scanner.models import CuratedStock, SavedSearch, ValuationHistory
+from scanner.models import CuratedStock, SavedSearch, ScanStatus, ScanUsage, ValuationHistory
+from scanner.quota import (
+    check_and_record_scan,
+    get_remaining_quota,
+    get_todays_usage_count,
+    get_usage_history,
+    get_user_quota,
+    get_seconds_until_reset,
+)
 from scanner.scanner import perform_scan
 
 logger = logging.getLogger(__name__)
@@ -83,13 +93,21 @@ def run_scan_in_background():
     Execute the scan in a background thread using Django cache.
 
     This function is responsible for:
+    - Creating a ScanStatus database record
     - Running the actual scan
     - Storing results in Django cache
+    - Updating ScanStatus with results
     - Releasing the scan lock when complete
     - Handling errors and setting appropriate status messages
     """
+    # Create scan status record
+    scan_status = ScanStatus.objects.create(
+        scan_type='curated',
+        status='in_progress'
+    )
+
     try:
-        logger.info("Background scan thread started")
+        logger.info(f"Background scan thread started (scan_id={scan_status.id})")
         # Allow scans outside market hours in LOCAL environment
         debug_mode = settings.ENVIRONMENT == "LOCAL"
         if debug_mode:
@@ -104,6 +122,9 @@ def run_scan_in_background():
             scan_results = result.get("scan_results", {})
             ticker_options = {}
             ticker_scan_times = {}
+
+            # Count total results
+            total_results = sum(len(options) for options in scan_results.values())
 
             for ticker, options in scan_results.items():
                 if options:  # Only store if options found
@@ -130,11 +151,18 @@ def run_scan_in_background():
                 timeout=settings.CACHE_TTL_OPTIONS,
             )
 
+            # Update scan status in database
+            scan_status.mark_completed(
+                result_count=total_results,
+                tickers_scanned=result['scanned_count']
+            )
+
             logger.info(
-                f"Background scan completed successfully: {result['scanned_count']} tickers"
+                f"Background scan completed successfully: {result['scanned_count']} tickers, "
+                f"{total_results} results (scan_id={scan_status.id})"
             )
         else:
-            logger.warning(f"Background scan failed: {result['message']}")
+            logger.warning(f"Background scan failed: {result['message']} (scan_id={scan_status.id})")
             # Set last_run to error message so it displays in the UI
             cache.set(
                 f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
@@ -142,19 +170,26 @@ def run_scan_in_background():
                 timeout=settings.CACHE_TTL_OPTIONS,
             )
 
+            # Mark scan as failed in database
+            scan_status.mark_failed(error_message=result["message"])
+
     except Exception as e:
-        logger.error(f"Error during background scan: {e}", exc_info=True)
+        logger.error(f"Error during background scan: {e} (scan_id={scan_status.id})", exc_info=True)
         # Set last_run to error message
+        error_msg = "An error occurred during the scan. Please check logs."
         cache.set(
             f"{settings.CACHE_KEY_PREFIX_SCANNER}:last_run",
-            "An error occurred during the scan. Please check logs.",
+            error_msg,
             timeout=settings.CACHE_TTL_OPTIONS,
         )
+
+        # Mark scan as failed in database
+        scan_status.mark_failed(error_message=f"{error_msg} Error: {str(e)}")
 
     finally:
         # Always release the lock
         cache.delete(f"{settings.CACHE_KEY_PREFIX_SCANNER}:{SCAN_LOCK_KEY}")
-        logger.debug("Background scan complete, lock released")
+        logger.debug(f"Background scan complete, lock released (scan_id={scan_status.id})")
 
 
 def get_scan_results():
@@ -898,10 +933,10 @@ def individual_scan_view(request):
     """
     Trigger individual stock scan in background.
 
-    Validates form, starts background thread, returns polling partial.
+    Enforces quota limit before starting scan. Blocks if quota exceeded.
 
     Returns:
-        HTMX partial: search_polling.html or form with errors
+        HTMX partial: quota_exceeded.html or search_polling.html or form with errors
     """
     form = IndividualStockScanForm(request.POST)
 
@@ -918,6 +953,35 @@ def individual_scan_view(request):
     weeks = form.cleaned_data.get('weeks', 4)
 
     user_id = request.user.id
+
+    # CHECK QUOTA AND RECORD USAGE ATOMICALLY (prevents race conditions)
+    success, scan_record, error_message = check_and_record_scan(request.user, 'individual', ticker)
+
+    if not success:
+        logger.warning(f"Quota exceeded for user {user_id}, blocking individual scan: {ticker} {option_type}")
+
+        # Get current quota info for display
+        remaining = get_remaining_quota(request.user)
+        limit = get_user_quota(request.user)
+        used = limit - remaining
+
+        context = {
+            'ticker': ticker,
+            'option_type': option_type,
+            'used': used,
+            'limit': limit,
+            'remaining': remaining,
+        }
+
+        # Return 200 so HTMX will swap the content (HTMX doesn't swap on 4xx by default)
+        # The error is communicated via the HTML content, not the status code
+        return render(
+            request,
+            'scanner/partials/quota_exceeded.html',
+            context,
+            status=200
+        )
+
     lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:individual_scan_lock:{user_id}"
 
     # Check if scan already in progress for this user
@@ -1146,6 +1210,8 @@ def quick_scan_view(request, pk):
     """
     Trigger background scan from saved search.
 
+    Enforces quota limit before starting scan.
+
     Args:
         pk: SavedSearch primary key
 
@@ -1156,6 +1222,34 @@ def quick_scan_view(request, pk):
         pk=pk,
         user=request.user
     )
+
+    # CHECK QUOTA AND RECORD USAGE ATOMICALLY (prevents race conditions)
+    success, scan_record, error_message = check_and_record_scan(request.user, 'individual', saved_search.ticker)
+
+    if not success:
+        logger.warning(f"Quota exceeded for user {request.user.id}, blocking quick scan: {saved_search.ticker}")
+
+        # Get current quota info for display
+        remaining = get_remaining_quota(request.user)
+        limit = get_user_quota(request.user)
+        used = limit - remaining
+
+        context = {
+            'ticker': saved_search.ticker,
+            'option_type': saved_search.option_type,
+            'used': used,
+            'limit': limit,
+            'remaining': remaining,
+        }
+
+        # Return 200 so HTMX will swap the content (HTMX doesn't swap on 4xx by default)
+        # The error is communicated via the HTML content, not the status code
+        return render(
+            request,
+            'scanner/partials/quota_exceeded.html',
+            context,
+            status=200
+        )
 
     # Increment usage statistics
     saved_search.increment_scan_count()
@@ -1175,6 +1269,11 @@ def quick_scan_view(request, pk):
         context = _get_individual_scan_context(user_id)
         return render(request, 'scanner/partials/search_polling.html', context)
 
+    # Clear any previous scan results before starting new scan
+    prefix = settings.CACHE_KEY_PREFIX_SCANNER
+    cache.delete(f"{prefix}:individual_scan_results:{user_id}")
+    cache.delete(f"{prefix}:individual_scan_status:{user_id}")
+
     # Set lock
     cache.set(lock_key, True, timeout=600)
 
@@ -1189,6 +1288,15 @@ def quick_scan_view(request, pk):
         option_type,
         timeout=600,
     )
+
+    # Set initial status for immediate feedback
+    cache.set(
+        f"{prefix}:individual_scan_status:{user_id}",
+        "Initializing scan...",
+        timeout=600,
+    )
+
+    logger.info(f"Starting quick scan for user {user_id}: {ticker} {option_type}s")
 
     # Start background thread (reuse Phase 7 logic)
     scan_thread = threading.Thread(
@@ -1235,3 +1343,160 @@ def edit_search_notes_view(request, pk):
     }
 
     return render(request, 'scanner/partials/search_notes_display.html', context)
+
+
+@login_required
+def usage_dashboard_view(request):
+    """
+    Display user's API usage dashboard.
+
+    Shows current usage, quota limit, progress bar, countdown timer,
+    and historical usage chart.
+    """
+    user = request.user
+
+    # Get usage statistics
+    used = get_todays_usage_count(user)
+    limit = get_user_quota(user)
+    remaining = get_remaining_quota(user)
+    percentage = (used / limit * 100) if limit > 0 else 0
+
+    # Determine progress bar color
+    if percentage < 70:
+        progress_color = 'green'
+    elif percentage < 90:
+        progress_color = 'yellow'
+    else:
+        progress_color = 'red'
+
+    # Get breakdown by scan type (today only)
+    eastern = ZoneInfo('US/Eastern')
+    now_eastern = datetime.now(eastern)
+    today_start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    curated_count = ScanUsage.objects.filter(
+        user=user,
+        scan_type='curated',
+        timestamp__gte=today_start,
+        timestamp__lt=today_end
+    ).count()
+
+    individual_count = ScanUsage.objects.filter(
+        user=user,
+        scan_type='individual',
+        timestamp__gte=today_start,
+        timestamp__lt=today_end
+    ).count()
+
+    # Get historical data for chart (last 7 days)
+    history = get_usage_history(user, days=7)
+
+    # Calculate seconds until reset
+    seconds_until_reset = get_seconds_until_reset()
+
+    context = {
+        'used': used,
+        'limit': limit,
+        'remaining': remaining,
+        'percentage': round(percentage, 1),
+        'progress_color': progress_color,
+        'curated_count': curated_count,
+        'individual_count': individual_count,
+        'chart_labels': json.dumps(history['labels']),
+        'chart_data': json.dumps(history['data']),
+        'seconds_until_reset': seconds_until_reset,
+        'is_superuser': user.is_superuser,
+    }
+
+    return render(request, 'scanner/usage_dashboard.html', context)
+
+
+# ========================
+# Staff Monitoring Views
+# ========================
+
+
+@staff_member_required
+def scan_monitor_view(request):
+    """
+    Staff-only page to monitor scan operations and diagnose issues.
+
+    Shows:
+    - Current scan status from database
+    - Redis lock state (exists/clear, TTL)
+    - Ability to clear stuck locks
+    """
+    scan_lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:{SCAN_LOCK_KEY}"
+
+    # Get the most recent scan status from database
+    latest_scan = ScanStatus.objects.first()  # Ordered by -start_time
+
+    # Check Redis lock state
+    lock_exists = cache.get(scan_lock_key) is not None
+    lock_value = cache.get(scan_lock_key)
+
+    # Get TTL for the lock (if it exists)
+    # Note: Django's cache backend doesn't expose TTL directly,
+    # so we'll use redis-py to get it for this diagnostic view
+    lock_ttl = None
+    if lock_exists:
+        try:
+            from django_redis import get_redis_connection
+            redis_conn = get_redis_connection("default")
+            # The cache key includes the prefix "wheel_analyzer:1:"
+            full_key = f"wheel_analyzer:1:{scan_lock_key}"
+            lock_ttl = redis_conn.ttl(full_key)
+        except Exception as e:
+            logger.warning(f"Could not get lock TTL: {e}")
+
+    # Format duration for template
+    duration_str = None
+    if latest_scan and latest_scan.duration is not None:
+        total_seconds = int(latest_scan.duration)
+        minutes, seconds = divmod(total_seconds, 60)
+        if minutes > 0:
+            duration_str = f"{minutes}m {seconds}s"
+        else:
+            duration_str = f"{seconds}s"
+
+    context = {
+        'latest_scan': latest_scan,
+        'lock_exists': lock_exists,
+        'lock_value': lock_value,
+        'lock_ttl': lock_ttl,
+        'lock_key': scan_lock_key,
+        'duration_str': duration_str,
+    }
+
+    return render(request, 'scanner/scan_monitor.html', context)
+
+
+@staff_member_required
+@require_POST
+def clear_scan_lock_view(request):
+    """
+    Clear the Redis scan lock and abort any in-progress scan in the database.
+
+    This is used when a scan gets stuck and needs manual intervention.
+    """
+    scan_lock_key = f"{settings.CACHE_KEY_PREFIX_SCANNER}:{SCAN_LOCK_KEY}"
+
+    # Delete the Redis lock
+    cache.delete(scan_lock_key)
+    logger.info(f"Staff user {request.user.username} cleared scan lock: {scan_lock_key}")
+
+    # Find any active scans and mark them as aborted
+    active_scans = ScanStatus.objects.filter(status__in=['pending', 'in_progress'])
+    aborted_count = 0
+
+    for scan in active_scans:
+        scan.mark_aborted(reason=f'Manually aborted by staff user {request.user.username}')
+        aborted_count += 1
+        logger.info(f"Marked scan {scan.id} as aborted by {request.user.username}")
+
+    # Return HTMX-friendly response
+    return render(request, 'scanner/partials/lock_cleared_message.html', {
+        'aborted_count': aborted_count,
+        'username': request.user.username,
+    })

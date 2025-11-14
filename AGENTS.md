@@ -81,7 +81,7 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
 - Custom QuerySets via managers: `CampaignsQuerySet`, `TransactionsQuerySet`
 
 **scanner**: Options scanning and analysis tools
-- Models: `OptionsWatch` - watchlist for stocks to monitor, `CuratedStock` - stocks for valuation analysis, `ValuationHistory` - quarterly snapshots, `SavedSearch` - user bookmarks for frequently scanned tickers
+- Models: `OptionsWatch` - watchlist for stocks to monitor, `CuratedStock` - stocks for valuation analysis, `ValuationHistory` - quarterly snapshots, `SavedSearch` - user bookmarks for frequently scanned tickers, `ScanStatus` - background scan operation tracking, `ScanUsage` - API usage tracking, `UserQuota` - daily scan limits
 - Forms: `IndividualStockScanForm` - form for individual stock search with validation
 - External integrations:
   - `scanner/marketdata/` - Market data API wrapper for fetching options chains
@@ -89,6 +89,7 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
 - Custom management commands for scanning and analyzing options data
 - Valuation module (`scanner/valuation.py`) - DCF calculations using EPS and FCF methods
 - Analytics module (`scanner/analytics.py`) - Volatility, CAGR, correlation calculations
+- Quota module (`scanner/quota.py`) - API usage tracking and enforcement
 - Caches options data and Alpha Vantage API responses in Redis for performance
 - **Views**:
   - Curated scanner: `index()`, `scan_view()`, `scan_status()`, `options_list()`
@@ -96,6 +97,8 @@ Use `just exec python manage.py <command>` for Docker environment, or `uv run ma
   - Saved searches: `saved_searches_view()`, `save_search_view()`, `delete_search_view()`, `quick_scan_view()`, `edit_search_notes_view()`
   - Valuations: `valuation_list_view()`, `stock_history_view()`, `valuation_comparison_view()`, `analytics_view()`
   - Exports: `export_valuation_history_csv()`
+  - Usage tracking: `usage_dashboard_view()`
+  - Staff monitoring: `scan_monitor_view()`, `clear_scan_lock_view()`
 
 ### Key Files
 
@@ -293,22 +296,23 @@ The Django application can run locally while using Docker only for PostgreSQL an
 - See @reference/ROADMAP.md for current status and next steps
 - Spec-based development workflow with comprehensive specifications in `/specs` directory
 - Use `/build specs/phase-N-description.md` to start implementation of a new phase
-- **Current Status**: Phase 7.1 completed ✅ - Save Searches feature fully implemented with 340/340 tests passing (100% pass rate). Users can now bookmark frequently scanned tickers for quick access. Key achievements:
-  - **SavedSearch Model** (`scanner/models.py` - 98 lines): user, ticker, option_type, notes, scan_count, last_scanned_at, soft delete pattern, custom manager with `active()` and `for_user()` methods
-  - **5 new views** (`scanner/views.py` - 232 lines): list with sorting, save with duplicate detection, soft delete, quick scan, inline notes editing
-  - **4 new templates** (250+ lines): main list page with modal, success/error messages, notes display, "Save This Search" button on results
-  - **HTMX integration**: Seamless partial updates without page reloads for save, delete, edit operations
-  - **User isolation**: ForeignKey with CASCADE delete, all queries filtered by user, unique constraint on (user, ticker, option_type)
-  - **Soft delete pattern**: Preserves audit trail and scan history via `is_deleted` flag
-  - **4 sorting options**: date created, ticker name, scan frequency, last scanned
-  - **Django admin**: Full CRUD interface with list display and filters
-  - Files changed: 11 files, 560 lines added
-  - Security audit: 11 findings (2 HIGH, 5 MEDIUM, 3 LOW, 1 INFO) - XSS vulnerability fixed with |escapejs filter
-  - Code review: Well-structured implementation following existing patterns
-  - Test coverage: 79 comprehensive tests generated (96% passing)
-- **Next**: Consider Phase 7.2 (Rate Limit Dashboard), Phase 8 (Stock Price Integration), or address security findings:
-  - Phase 7.2: API quota tracking and visualization dashboard with daily scan count and quota limits
-  - Phase 8: Current stock price integration for undervaluation analysis
-  - Address HIGH security findings: rate limiting decorators, ticker validation regex
+- **Current Status**: Phase 7.2 completed ✅ + Ad-hoc Staff Monitoring feature ✅
+  - **Phase 7.2 (Rate Limit Dashboard)**: API usage tracking and quota visualization (433 tests passing, 100% pass rate)
+    - `ScanUsage` model: Tracks every individual search scan with user, ticker, timestamp
+    - `UserQuota` model: Per-user daily limits (default 25 scans/day)
+    - Quota enforcement: Atomic check-and-record with row locking prevents concurrent bypass
+    - Usage dashboard: 7-day Chart.js history, progress bars, countdown timers
+    - HTTP 429 responses: Friendly error messages with reset time
+    - Midnight resets: US/Eastern timezone handling
+  - **Ad-hoc Staff Monitoring**: Diagnostic page for background scan operations (472 tests passing)
+    - `ScanStatus` model: Tracks all scan operations with status, timestamps, results
+    - Staff-only page: `/scanner/admin/monitor/` with auto-refresh (10s)
+    - Redis lock monitoring: Lock state, TTL, full key path
+    - Clear lock button: Deletes Redis lock AND marks active scans as aborted
+    - Django admin integration: Full CRUD with filters, search, date hierarchy
+    - Comprehensive logging: Scan lifecycle events, admin actions, audit trail
+- **Next Steps**:
+  - Phase 8: Stock Price Integration (current price vs intrinsic value analysis)
+  - Address security findings from Phase 7.1 (rate limiting, ticker validation)
   - See `reference/ROADMAP.md` for detailed phase descriptions
   

@@ -417,3 +417,204 @@ class SavedSearch(models.Model):
         """Mark as deleted without removing from database."""
         self.is_deleted = True
         self.save(update_fields=['is_deleted'])
+
+
+class ScanUsage(models.Model):
+    """
+    Record of individual scan operation for quota tracking.
+
+    Tracks when users execute scans (curated or individual) for
+    rate limit enforcement and usage analytics.
+    """
+
+    SCAN_TYPE_CHOICES = [
+        ('curated', 'Curated Scanner'),
+        ('individual', 'Individual Search'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='scan_usage',
+        help_text="User who performed the scan"
+    )
+    scan_type = models.CharField(
+        max_length=20,
+        choices=SCAN_TYPE_CHOICES,
+        help_text="Type of scan operation"
+    )
+    ticker = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Stock symbol (for individual scans only)"
+    )
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the scan was executed"
+    )
+
+    class Meta:
+        db_table = 'scanner_scan_usage'
+        verbose_name = 'Scan Usage'
+        verbose_name_plural = 'Scan Usage Records'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['timestamp']),
+        ]
+
+    def __str__(self):
+        ticker_str = f" ({self.ticker})" if self.ticker else ""
+        return f"{self.user.username} - {self.scan_type}{ticker_str} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+
+
+class UserQuota(models.Model):
+    """
+    Per-user daily scan quota configuration.
+
+    Stores the maximum number of scans allowed per day for each user.
+    Default is 25 scans/day to align with Alpha Vantage free tier limits.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='quota',
+        help_text="User this quota applies to"
+    )
+    daily_limit = models.IntegerField(
+        default=25,
+        help_text="Maximum scans allowed per day"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When quota was created"
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Last modification timestamp"
+    )
+
+    class Meta:
+        db_table = 'scanner_user_quota'
+        verbose_name = 'User Quota'
+        verbose_name_plural = 'User Quotas'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.daily_limit}/day"
+
+    @classmethod
+    def get_quota_for_user(cls, user):
+        """Get or create quota for user with default limit."""
+        quota, created = cls.objects.get_or_create(
+            user=user,
+            defaults={'daily_limit': 25}
+        )
+        return quota
+
+
+class ScanStatus(models.Model):
+    """
+    Track the status of background scan operations.
+
+    This model provides visibility into the current state of scan operations
+    and helps diagnose issues when scans fail or get stuck.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('aborted', 'Aborted'),
+    ]
+
+    SCAN_TYPE_CHOICES = [
+        ('curated', 'Curated Stocks'),
+        ('individual', 'Individual Stock'),
+    ]
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        help_text="Current status of the scan operation"
+    )
+    scan_type = models.CharField(
+        max_length=20,
+        choices=SCAN_TYPE_CHOICES,
+        default='curated',
+        help_text="Type of scan being performed"
+    )
+    start_time = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the scan started"
+    )
+    end_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the scan completed/failed"
+    )
+    result_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of results found"
+    )
+    tickers_scanned = models.IntegerField(
+        default=0,
+        help_text="Number of tickers scanned"
+    )
+    error_message = models.TextField(
+        blank=True,
+        help_text="Error message if scan failed"
+    )
+
+    class Meta:
+        db_table = 'scanner_scan_status'
+        verbose_name = 'Scan Status'
+        verbose_name_plural = 'Scan Statuses'
+        ordering = ['-start_time']
+        indexes = [
+            models.Index(fields=['-start_time']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.scan_type} scan - {self.status} ({self.start_time})"
+
+    @property
+    def duration(self):
+        """Calculate duration of the scan in seconds."""
+        if self.end_time:
+            return (self.end_time - self.start_time).total_seconds()
+        elif self.status == 'in_progress':
+            return (timezone.now() - self.start_time).total_seconds()
+        return None
+
+    @property
+    def is_active(self):
+        """Check if scan is currently active."""
+        return self.status in ['pending', 'in_progress']
+
+    def mark_completed(self, result_count=None, tickers_scanned=0):
+        """Mark scan as completed with results."""
+        self.status = 'completed'
+        self.end_time = timezone.now()
+        self.result_count = result_count
+        self.tickers_scanned = tickers_scanned
+        self.save()
+
+    def mark_failed(self, error_message=''):
+        """Mark scan as failed with error message."""
+        self.status = 'failed'
+        self.end_time = timezone.now()
+        self.error_message = error_message
+        self.save()
+
+    def mark_aborted(self, reason='Manually aborted by staff'):
+        """Mark scan as aborted (usually due to manual intervention)."""
+        self.status = 'aborted'
+        self.end_time = timezone.now()
+        self.error_message = reason
+        self.save()

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CuratedStock, OptionsWatch, SavedSearch, ValuationHistory
+from .models import CuratedStock, OptionsWatch, SavedSearch, ScanStatus, ScanUsage, UserQuota, ValuationHistory
 
 
 @admin.register(CuratedStock)
@@ -147,6 +147,57 @@ class SavedSearchAdmin(admin.ModelAdmin):
     search_fields = ['ticker', 'user__username', 'notes']
     readonly_fields = ['scan_count', 'last_scanned_at', 'created_at']
     ordering = ['-created_at']
+
+
+@admin.register(ScanUsage)
+class ScanUsageAdmin(admin.ModelAdmin):
+    list_display = ['user', 'scan_type', 'ticker', 'timestamp']
+    list_filter = ['scan_type', 'timestamp']
+    search_fields = ['user__username', 'ticker']
+    readonly_fields = ['timestamp']
+    ordering = ['-timestamp']
+    date_hierarchy = 'timestamp'
+
+
+@admin.register(UserQuota)
+class UserQuotaAdmin(admin.ModelAdmin):
+    list_display = ['user', 'daily_limit', 'created_at', 'updated_at']
+    search_fields = ['user__username']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['user__username']
+
+
+@admin.register(ScanStatus)
+class ScanStatusAdmin(admin.ModelAdmin):
+    list_display = ['scan_type', 'status', 'start_time', 'end_time', 'tickers_scanned', 'result_count']
+    list_filter = ['status', 'scan_type', 'start_time']
+    search_fields = ['error_message']
+    readonly_fields = ['start_time', 'duration']
+    ordering = ['-start_time']
+    date_hierarchy = 'start_time'
+
+    fieldsets = (
+        ('Scan Information', {
+            'fields': ('scan_type', 'status', 'start_time', 'end_time', 'duration')
+        }),
+        ('Results', {
+            'fields': ('tickers_scanned', 'result_count')
+        }),
+        ('Error Details', {
+            'fields': ('error_message',),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def duration(self, obj):
+        """Display scan duration in human-readable format."""
+        if obj.duration is not None:
+            minutes, seconds = divmod(int(obj.duration), 60)
+            if minutes > 0:
+                return f"{minutes}m {seconds}s"
+            return f"{seconds}s"
+        return "N/A"
+    duration.short_description = 'Duration'
 
 
 # Register your models here.

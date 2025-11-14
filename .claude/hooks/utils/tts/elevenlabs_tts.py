@@ -9,9 +9,8 @@
 
 import os
 import sys
-
+from pathlib import Path
 from dotenv import load_dotenv
-
 
 def main():
     """
@@ -36,7 +35,7 @@ def main():
     load_dotenv()
 
     # Get API key from environment
-    api_key = os.getenv("ELEVENLABS_API_KEY")
+    api_key = os.getenv('ELEVENLABS_API_KEY')
     if not api_key:
         print("❌ Error: ELEVENLABS_API_KEY not found in environment variables")
         print("Please add your ElevenLabs API key to .env file:")
@@ -66,7 +65,7 @@ def main():
             # Generate and play audio directly
             audio = elevenlabs.text_to_speech.convert(
                 text=text,
-                voice_id="nPczCjzI2devNBz1zQrb",  # Specified voice
+                voice_id="WejK3H1m7MI9CHnIjW9K",  # Specified voice
                 model_id="eleven_flash_v2_5",
                 output_format="mp3_44100_128",
             )
@@ -77,6 +76,7 @@ def main():
         except Exception as e:
             print(f"❌ Error: {e}")
 
+
     except ImportError:
         print("❌ Error: elevenlabs package not installed")
         print("This script uses UV to auto-install dependencies.")
@@ -85,7 +85,6 @@ def main():
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

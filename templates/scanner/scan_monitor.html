@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Monitor - Staff Only{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+            Scan Monitor
+        </h1>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            Staff-only diagnostic page for monitoring scan operations and clearing stuck locks.
+        </p>
+    </div>
+
+    <!-- Auto-refresh notice -->
+    <div class="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div class="flex items-center">
+            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span class="text-sm text-blue-800 dark:text-blue-200">
+                This page auto-refreshes every 10 seconds
+            </span>
+        </div>
+    </div>
+
+    <!-- Redis Lock Status Card -->
+    <div class="mb-6 bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                Redis Lock Status
+            </h2>
+        </div>
+        <div class="px-6 py-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Lock State -->
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Lock State</dt>
+                    <dd class="mt-1 flex items-center">
+                        {% if lock_exists %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
+                                <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                                </svg>
+                                Locked
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                                <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Clear
+                            </span>
+                        {% endif %}
+                    </dd>
+                </div>
+
+                <!-- Lock TTL -->
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Time to Live (TTL)</dt>
+                    <dd class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                        {% if lock_ttl %}
+                            {{ lock_ttl }} seconds
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </dd>
+                </div>
+
+                <!-- Lock Key -->
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Redis Key</dt>
+                    <dd class="mt-1 text-sm text-gray-900 dark:text-white font-mono break-all">
+                        {{ lock_key }}
+                    </dd>
+                </div>
+            </div>
+
+            <!-- Clear Lock Button -->
+            {% if lock_exists %}
+            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div id="lock-message-container"></div>
+                <button
+                    hx-post="{% url 'scanner:clear_scan_lock' %}"
+                    hx-target="#lock-message-container"
+                    hx-swap="innerHTML"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    Clear Lock
+                </button>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    ⚠️ This will delete the Redis lock and mark any in-progress scans as aborted.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Latest Scan Status Card -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                Latest Scan Status
+            </h2>
+        </div>
+        <div class="px-6 py-5">
+            {% if latest_scan %}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Scan ID -->
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Scan ID</dt>
+                        <dd class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                            #{{ latest_scan.id }}
+                        </dd>
+                    </div>
+
+                    <!-- Status -->
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Status</dt>
+                        <dd class="mt-1">
+                            {% if latest_scan.status == 'completed' %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                                    Completed
+                                </span>
+                            {% elif latest_scan.status == 'in_progress' %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+                                    In Progress
+                                </span>
+                            {% elif latest_scan.status == 'failed' %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
+                                    Failed
+                                </span>
+                            {% elif latest_scan.status == 'aborted' %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+                                    Aborted
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+                                    {{ latest_scan.get_status_display }}
+                                </span>
+                            {% endif %}
+                        </dd>
+                    </div>
+
+                    <!-- Scan Type -->
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Scan Type</dt>
+                        <dd class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                            {{ latest_scan.get_scan_type_display }}
+                        </dd>
+                    </div>
+
+                    <!-- Duration -->
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Duration</dt>
+                        <dd class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                            {% if duration_str %}
+                                {{ duration_str }}
+                            {% elif latest_scan.is_active %}
+                                <span class="text-blue-600 dark:text-blue-400">Running...</span>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </dd>
+                    </div>
+                </div>
+
+                <!-- Timestamps -->
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Start Time</dt>
+                        <dd class="mt-1 text-sm text-gray-900 dark:text-white">
+                            {{ latest_scan.start_time|date:"Y-m-d H:i:s" }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">End Time</dt>
+                        <dd class="mt-1 text-sm text-gray-900 dark:text-white">
+                            {% if latest_scan.end_time %}
+                                {{ latest_scan.end_time|date:"Y-m-d H:i:s" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </dd>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Tickers Scanned</dt>
+                        <dd class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ latest_scan.tickers_scanned }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Results Found</dt>
+                        <dd class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                            {% if latest_scan.result_count is not None %}
+                                {{ latest_scan.result_count }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </dd>
+                    </div>
+                </div>
+
+                <!-- Error Message (if any) -->
+                {% if latest_scan.error_message %}
+                <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <dt class="text-sm font-medium text-red-600 dark:text-red-400">Error Message</dt>
+                    <dd class="mt-2 text-sm text-gray-900 dark:text-white bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
+                        {{ latest_scan.error_message }}
+                    </dd>
+                </div>
+                {% endif %}
+            {% else %}
+                <p class="text-gray-500 dark:text-gray-400 text-center py-8">
+                    No scan records found.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Navigation Links -->
+    <div class="mt-8 flex justify-between">
+        <a href="{% url 'scanner:index' %}" class="text-blue-600 dark:text-blue-400 hover:underline">
+            ← Back to Scanner
+        </a>
+        <a href="{% url 'admin:index' %}" class="text-blue-600 dark:text-blue-400 hover:underline">
+            Django Admin →
+        </a>
+    </div>
+</div>
+
+<!-- Auto-refresh script -->
+<script>
+    // Auto-refresh page every 10 seconds
+    setTimeout(function() {
+        window.location.reload();
+    }, 10000);
+</script>
+{% endblock %}

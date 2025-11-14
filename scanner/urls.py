@@ -25,4 +25,9 @@ urlpatterns = [
     path("searches/delete/<int:pk>/", views.delete_search_view, name="delete_search"),
     path("searches/scan/<int:pk>/", views.quick_scan_view, name="quick_scan"),
     path("searches/edit/<int:pk>/", views.edit_search_notes_view, name="edit_search_notes"),
+    # API Usage Dashboard (Phase 7.2)
+    path("usage/", views.usage_dashboard_view, name="usage_dashboard"),
+    # Staff Monitoring (Ad-hoc)
+    path("admin/monitor/", views.scan_monitor_view, name="scan_monitor"),
+    path("admin/clear-lock/", views.clear_scan_lock_view, name="clear_scan_lock"),
 ]

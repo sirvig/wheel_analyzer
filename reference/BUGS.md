@@ -1,6 +1,8 @@
 # Bugs
 
 Pending:
+- On /scanner/searches/ when clicking on "Quick Scan", the first banner will show the previous search rather than "Initializing Scan...".  It will show the results of previous searches for other stocks.
+- On /scanner/search/ when a user attempts to search and is over quota, there is a log message recorded but no user notification that they are over quota.  It looks to the user like the scan just did nothing.  Please notify the user if over quota with a link to quota usage page at /scanner/usage/
 
 Completed:
 - ✅ On /scanner/searches/, after clicking edit and adding a note and clicking save, the edit notes dialog does not disappear. The X or cancel buttons do not work to close it. A page refresh does not show the note was added. The error in the log shows "You're accessing the development server over HTTPS, but it only supports HTTP."
