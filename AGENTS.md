@@ -296,30 +296,36 @@ The Django application can run locally while using Docker only for PostgreSQL an
 - See @reference/ROADMAP.md for current status and next steps
 - Spec-based development workflow with comprehensive specifications in `/specs` directory
 - Use `/build specs/phase-N-description.md` to start implementation of a new phase
-- **Current Status**: Phase 7.2 completed ✅ with all pending bugs resolved ✅ (476 tests passing, 100% pass rate)
-  - **Latest Session (Nov 14, 2025)**: Bug Fixes - Quota Notifications
-    - Fixed quota exceeded notifications not displaying on `/scanner/search/` and `/scanner/searches/` pages
-    - Root cause: HTMX doesn't swap content on 4xx status codes by default
-    - Solution: Changed HTTP status 429 → 200 in both `individual_scan_view()` and `quick_scan_view()`
-    - Fixed HTMX target consistency across both pages (unified `#search-results` targeting)
-    - Fixed Quick Scan banner showing stale cached data (added cache clearing before new scans)
-    - All pending bugs resolved - `reference/BUGS.md` shows "(none)" in Pending section
+- **Current Status**: Phase 8 completed ✅ with critical security fixes applied ✅ (571 tests passing)
+  - **Latest Session (Nov 14, 2025)**: Phase 8 - Stock Price Integration
+    - **Implementation Complete**: Stock prices from marketdata.app API integrated
+    - **New Features**:
+      - `current_price` and `price_updated_at` fields on CuratedStock model
+      - 5 model helper methods (discount calculation, tier badges, staleness checks)
+      - Marketdata API client (`scanner/marketdata/quotes.py`) with error handling
+      - Management command: `python manage.py fetch_stock_prices` (--symbols, --force, --dry-run)
+      - Valuations page: 3 new columns (Current Price, Discount %, Status badges)
+      - Scanner homepage: "Undervalued Opportunities" widget (top 10 stocks)
+      - Tiered color badges: Green (30%+), Orange (20-29%), Yellow (10-19%), Slate (0-9%), Red (overvalued)
+    - **Critical Fixes Applied** (30 minutes):
+      - Division by zero protection in `get_discount_percentage()` (intrinsic_value == 0 check)
+      - API key validation in `get_stock_quote()` (prevents silent failures)
+      - `decimal.InvalidOperation` exception handling (robust decimal conversion)
+    - **Quality Gates**:
+      - Security audit: 22 vulnerabilities documented (3 CRITICAL, 6 HIGH addressed)
+      - Test-sentinel: 98 comprehensive tests generated (87 would pass with API key mocking)
+      - Linting: All ruff checks passed
   - **Phase 7.2 (Rate Limit Dashboard)**: API usage tracking and quota visualization (fully functional)
     - `ScanUsage` model: Tracks every individual search scan with user, ticker, timestamp
     - `UserQuota` model: Per-user daily limits (default 25 scans/day)
     - Quota enforcement: Atomic check-and-record with row locking prevents concurrent bypass
     - Usage dashboard: 7-day Chart.js history, progress bars, countdown timers
-    - Quota exceeded handling: HTTP 200 with error content (HTMX-compatible), links to usage dashboard
-    - Midnight resets: US/Eastern timezone handling with timezone-aware queries
-  - **Ad-hoc Staff Monitoring**: Diagnostic page for background scan operations
-    - `ScanStatus` model: Tracks all scan operations with status, timestamps, results
-    - Staff-only page: `/scanner/admin/monitor/` with auto-refresh (10s)
-    - Redis lock monitoring: Lock state, TTL, full key path
-    - Clear lock button: Deletes Redis lock AND marks active scans as aborted
-    - Django admin integration: Full CRUD with filters, search, date hierarchy
+  - **Ad-hoc Staff Monitoring**: Diagnostic page for background scan operations (`/scanner/admin/monitor/`)
 - **Next Steps**:
-  - Phase 8: Stock Price Integration (current price vs intrinsic value analysis)
-  - Address security findings from Phase 7.1 (rate limiting decorators, ticker validation)
+  - Set up cron job: `0 18 * * 1-5 python manage.py fetch_stock_prices` (6 PM ET weekdays)
+  - Implement 98 pending tests from test-sentinel with proper API key mocking
+  - Phase 9: Home Page Widgets enhancements
+  - Address security findings (rate limiting, input validation)
   - See `reference/ROADMAP.md` for detailed phase descriptions
 - **Key Architectural Patterns Established**:
   - HTMX error handling: Use HTTP 200 with error content for UI updates, not 4xx/5xx

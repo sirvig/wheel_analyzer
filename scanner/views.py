@@ -50,10 +50,13 @@ SCAN_LOCK_TIMEOUT = 600  # 10 minutes
 @login_required
 def index(request):
     """
-    Display scanner index page with cached options results.
+    Display scanner index page with cached options results and undervalued stocks widget.
+
+    Phase 8: Added undervalued stocks widget showing top 10 stocks
+    with current price < intrinsic value and fresh price data (< 24 hours).
 
     Returns:
-        Rendered scanner/index.html template with options data
+        Rendered scanner/index.html template with options data and undervalued stocks
 
     Note:
         Returns safe defaults if Redis is unavailable.
@@ -61,6 +64,21 @@ def index(request):
     """
     # Use helper function to get scan results with curated stocks
     context = get_scan_results()
+
+    # Phase 8: Get undervalued stocks for widget
+    undervalued_stocks = []
+    for stock in CuratedStock.objects.filter(active=True):
+        if stock.is_undervalued() and not stock.is_price_stale():
+            undervalued_stocks.append({
+                'stock': stock,
+                'discount_pct': stock.get_discount_percentage(),
+                'tier': stock.get_undervaluation_tier()
+            })
+
+    # Sort by discount percentage (highest first) and take top 10
+    undervalued_stocks.sort(key=lambda x: x['discount_pct'], reverse=True)
+    context['undervalued_stocks'] = undervalued_stocks[:10]
+
     return render(request, "scanner/index.html", context)
 
 
@@ -332,32 +350,53 @@ def scan_status(request):
 @login_required
 def valuation_list_view(request):
     """
-    Display all active curated stocks with their valuation data.
+    Display all active curated stocks with their valuation data and price information.
 
-    Shows intrinsic values (EPS and FCF methods), calculation assumptions,
-    and last calculation dates for all active stocks in the curated list.
+    Shows intrinsic values (EPS and FCF methods), current prices, discount percentages,
+    and undervaluation tier badges for all active stocks in the curated list.
 
-    This page provides a comprehensive overview of the portfolio's intrinsic
-    value calculations, allowing users to review valuation metrics across
-    all monitored stocks.
+    Phase 8: Added stock price integration with discount calculation and sorting.
 
     Template: scanner/valuations.html
 
     Context:
-        stocks (QuerySet): All active CuratedStock instances ordered by symbol
+        stocks_with_discount (list): List of dicts with stock, discount_pct, tier, is_stale
+        latest_price_update (datetime): Most recent price update timestamp
 
     Example:
         Access via: /scanner/valuations/
-        Template receives list of stocks with all valuation fields
+        Template receives stocks sorted by discount percentage (best deals first)
     """
-    # Query all active curated stocks, ordered alphabetically
+    # Query all active curated stocks
     stocks = CuratedStock.objects.filter(active=True).order_by("symbol")
 
+    # Calculate discount percentages and annotate
+    stocks_with_discount = []
+    for stock in stocks:
+        stocks_with_discount.append({
+            'stock': stock,
+            'discount_pct': stock.get_discount_percentage(),
+            'tier': stock.get_undervaluation_tier(),
+            'is_stale': stock.is_price_stale()
+        })
+
+    # Sort by discount percentage (best deals first)
+    stocks_with_discount.sort(
+        key=lambda x: x['discount_pct'] if x['discount_pct'] is not None else -999,
+        reverse=True
+    )
+
+    # Get most recent price update timestamp
+    latest_update = CuratedStock.objects.filter(
+        price_updated_at__isnull=False
+    ).order_by('-price_updated_at').first()
+
     logger.info(f"Valuation list view accessed by {request.user.username}")
-    logger.debug(f"Displaying {stocks.count()} active curated stocks")
+    logger.debug(f"Displaying {len(stocks_with_discount)} active curated stocks")
 
     context = {
-        "stocks": stocks,
+        'stocks_with_discount': stocks_with_discount,
+        'latest_price_update': latest_update.price_updated_at if latest_update else None
     }
 
     return render(request, "scanner/valuations.html", context)
