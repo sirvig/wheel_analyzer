@@ -296,25 +296,33 @@ The Django application can run locally while using Docker only for PostgreSQL an
 - See @reference/ROADMAP.md for current status and next steps
 - Spec-based development workflow with comprehensive specifications in `/specs` directory
 - Use `/build specs/phase-N-description.md` to start implementation of a new phase
-- **Current Status**: Phase 8 completed ✅ with critical security fixes applied ✅ (571 tests passing)
-  - **Latest Session (Nov 14, 2025)**: Phase 8 - Stock Price Integration
-    - **Implementation Complete**: Stock prices from marketdata.app API integrated
+- **Current Status**: Phase 8 completed ✅ and merged to main ✅ (605 tests passing, 100% pass rate)
+  - **Latest Session (Nov 14, 2025)**: Phase 8 - Stock Price Integration (MERGED)
+    - **Implementation Complete**: Stock prices from marketdata.app API integrated and production-ready
     - **New Features**:
       - `current_price` and `price_updated_at` fields on CuratedStock model
       - 5 model helper methods (discount calculation, tier badges, staleness checks)
-      - Marketdata API client (`scanner/marketdata/quotes.py`) with error handling
+      - Marketdata API client (`scanner/marketdata/quotes.py`) with array response handling
       - Management command: `python manage.py fetch_stock_prices` (--symbols, --force, --dry-run)
       - Valuations page: 3 new columns (Current Price, Discount %, Status badges)
       - Scanner homepage: "Undervalued Opportunities" widget (top 10 stocks)
       - Tiered color badges: Green (30%+), Orange (20-29%), Yellow (10-19%), Slate (0-9%), Red (overvalued)
-    - **Critical Fixes Applied** (30 minutes):
-      - Division by zero protection in `get_discount_percentage()` (intrinsic_value == 0 check)
-      - API key validation in `get_stock_quote()` (prevents silent failures)
-      - `decimal.InvalidOperation` exception handling (robust decimal conversion)
-    - **Quality Gates**:
-      - Security audit: 22 vulnerabilities documented (3 CRITICAL, 6 HIGH addressed)
-      - Test-sentinel: 98 comprehensive tests generated (87 would pass with API key mocking)
-      - Linting: All ruff checks passed
+    - **API Integration**:
+      - marketdata.app API client with proper array response parsing
+      - Unix timestamp handling for price updates
+      - 30-second timeout with graceful error handling
+      - Comprehensive logging for debugging
+    - **Test Suite** (605 tests, 100% pass rate):
+      - test_stock_quote_api.py: 28 tests (API client with array responses)
+      - test_fetch_stock_prices_command.py: 24 tests (command execution)
+      - test_stock_price_integration.py: 5 tests (end-to-end workflows)
+      - test_stock_price_models.py: 36 tests (model methods and calculations)
+      - test_stock_price_views.py: 24 tests (valuations page rendering)
+    - **Bug Fixes**:
+      - Fixed API response parsing (arrays vs scalars)
+      - Updated 46 test mocks to match real API format
+      - Division by zero protection in discount calculations
+      - API key validation to prevent silent failures
   - **Phase 7.2 (Rate Limit Dashboard)**: API usage tracking and quota visualization (fully functional)
     - `ScanUsage` model: Tracks every individual search scan with user, ticker, timestamp
     - `UserQuota` model: Per-user daily limits (default 25 scans/day)
@@ -322,10 +330,9 @@ The Django application can run locally while using Docker only for PostgreSQL an
     - Usage dashboard: 7-day Chart.js history, progress bars, countdown timers
   - **Ad-hoc Staff Monitoring**: Diagnostic page for background scan operations (`/scanner/admin/monitor/`)
 - **Next Steps**:
-  - Set up cron job: `0 18 * * 1-5 python manage.py fetch_stock_prices` (6 PM ET weekdays)
-  - Implement 98 pending tests from test-sentinel with proper API key mocking
-  - Phase 9: Home Page Widgets enhancements
-  - Address security findings (rate limiting, input validation)
+  - **Production Setup**: Set up cron job `0 18 * * 1-5 python manage.py fetch_stock_prices` (6 PM ET weekdays)
+  - **Phase 9**: Home Page Widgets (undervalued stocks widget, favorable options widget)
+  - Address security findings from Phase 7-8 (rate limiting, input validation)
   - See `reference/ROADMAP.md` for detailed phase descriptions
 - **Key Architectural Patterns Established**:
   - HTMX error handling: Use HTTP 200 with error content for UI updates, not 4xx/5xx
