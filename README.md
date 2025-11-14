@@ -202,21 +202,36 @@ See `CLAUDE.md` for detailed development guidelines and `specs/` directory for p
 
 ## Current Status
 
-**Latest Milestone**: Phase 7.2 - Rate Limit Dashboard + Staff Monitoring (Completed ✅)
-- **Phase 7.2**: API usage tracking with daily quota enforcement (25 scans/day)
-  - ScanUsage and UserQuota models with atomic check-and-record
-  - Usage dashboard with 7-day Chart.js history and progress bars
-  - Quota exceeded handling with HTTP 429 responses and friendly error messages
-  - Midnight resets with US/Eastern timezone handling
-  - 433 tests passing (100% pass rate)
-- **Staff Monitoring** (Ad-hoc): Diagnostic page for background scan operations
-  - ScanStatus model tracking all scan operations with status and timestamps
-  - Staff-only page at `/scanner/admin/monitor/` with auto-refresh (10s)
-  - Redis lock monitoring with TTL display and one-click clear button
-  - Django admin integration with full CRUD, filters, and date hierarchy
-  - 472 tests passing (100% pass rate) - 21 new comprehensive tests
+**Latest Milestone**: Phase 8 - Stock Price Integration (Completed ✅ and merged to main ✅)
+- **Phase 8**: Current stock prices from marketdata.app API for undervaluation analysis
+  - Stock price fetching with marketdata.app API (array-based response handling)
+  - CuratedStock model enhancements: current_price, price_updated_at, is_undervalued property
+  - Management command: `fetch_stock_prices` with --symbols and --force flags
+  - Valuations page with 3 new columns: Current Price, Discount %, Tier
+  - Undervalued opportunities widget on home page (green cards with tier badges)
+  - Color-coded tier system: 30%+ (green), 20-29% (orange), 10-19% (yellow), <10% (gray)
+  - Market hours awareness with timezone handling (US/Eastern)
+  - 15-minute cache TTL during market hours for price data
+  - 605 tests passing (100% pass rate) ✅
+  - Test suite breakdown:
+    - test_stock_quote_api.py: 28 tests (API client with array responses)
+    - test_fetch_stock_prices_command.py: 24 tests (command execution)
+    - test_stock_price_integration.py: 5 tests (end-to-end workflows)
+    - test_stock_price_models.py: 36 tests (model methods and calculations)
+    - test_stock_price_views.py: 24 tests (valuations page rendering)
 
 **Recent Updates**:
+- **Nov 14, 2025**: Phase 8 Implementation Complete (Stock Price Integration) ✅
+  - marketdata.app API integration with array-based response parsing
+  - CuratedStock model: current_price, price_updated_at fields + 5 helper methods
+  - Management command: fetch_stock_prices with --symbols and --force options
+  - Valuations page: Current Price, Discount %, Tier columns added
+  - Home page widget: Undervalued opportunities with tier badges
+  - Fixed API response parsing bug (arrays vs scalars)
+  - Fixed 15 test failures (context variables, Mock datetime, array formats)
+  - 117 new tests added across 5 test files (28 + 24 + 5 + 36 + 24)
+  - 605 tests passing (100% pass rate) ✅
+
 - **Nov 14, 2025**: Bug Fixes - Quota Notifications Working (Phase 7.2)
   - Fixed quota exceeded notifications not displaying on search pages
   - Root cause: HTMX doesn't swap content on 4xx status codes by default
@@ -279,12 +294,19 @@ See `CLAUDE.md` for detailed development guidelines and `specs/` directory for p
   - CSV export functionality (single stock and all stocks)
   - 31 new tests bringing total to 247 tests
 
-**Next Phase**: Phase 8 - Stock Price Integration
-- Integrate current stock prices from marketdata API
-- Identify undervalued investment opportunities (price < intrinsic value)
-- Undervalued stocks widget on home page
-- Valuations page enhancements with current price column
-- Daily cron job to fetch prices after market close
+- **Nov 14, 2025**: Phase 8 Implementation Complete (Stock Price Integration)
+  - marketdata.app API integration for current stock prices
+  - CuratedStock model enhancements with price fields and helper methods
+  - Management command: `fetch_stock_prices` with options
+  - Valuations page with price comparison columns
+  - Home page widget showing undervalued opportunities
+  - 117 new tests across 5 test files
+  - 605 tests passing (100% pass rate)
+
+**Next Phase**: Phase 9 - Home Page Widgets
+- Favorable options widget (strike ≤ intrinsic value)
+- Target stocks widget expansion (additional metrics)
+- Performance summaries and actionable insights
 - Full specification available in `reference/ROADMAP.md`
 
 ## Testing
@@ -300,7 +322,7 @@ just test scanner/tests/test_scanner_views.py
 uv run pytest --cov
 ```
 
-**Test Suite**: 472 tests passing (100% pass rate) ✅
+**Test Suite**: 605 tests passing (100% pass rate) ✅
 - Scanner views and integration tests (curated + individual)
 - Valuation calculation tests (EPS & FCF methods)
 - Template filter tests with type safety validation
@@ -313,6 +335,7 @@ uv run pytest --cov
 - Saved searches tests (Phase 7.1 - 79 tests)
 - Quota enforcement tests (Phase 7.2 - 14 tests)
 - Staff monitoring tests (Ad-hoc - 21 tests)
+- Stock price integration tests (Phase 8 - 117 tests across 5 files)
 
 ## Roadmap
 
@@ -331,9 +354,9 @@ uv run pytest --cov
 - ✅ **Phase 7.1**: Save Searches (bookmark tickers, one-click scans, soft delete)
 - ✅ **Phase 7.2**: Rate Limit Dashboard (API quota tracking, usage visualization, 433 tests)
 - ✅ **Ad-hoc**: Staff Monitoring (scan diagnostics, Redis lock management, 472 tests)
+- ✅ **Phase 8**: Stock Price Integration (marketdata.app API, undervaluation analysis, 605 tests)
 
 ### Planned Phases
-- 📋 **Phase 8**: Stock Price Integration (marketdata API, undervaluation analysis)
 - 📋 **Phase 9**: Home Page Widgets (undervalued stocks, favorable options)
 - 📋 **Phase 10**: Trading Journal (performance tracking, tax calculations)
 
